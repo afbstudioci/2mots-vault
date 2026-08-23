@@ -1,6 +1,8 @@
 name: Generate 10M Infinite Vault
 
 on:
+  schedule:
+    - cron: '0 0 1 * *' # S'exécute automatiquement le 1er de chaque mois à minuit
   workflow_dispatch:
   push:
     branches:
