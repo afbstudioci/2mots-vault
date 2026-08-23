@@ -1,0 +1,99 @@
+name: Generate 10M Infinite Vault
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-vault:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Génération des 10 Millions d'Énigmes par Paliers
+        run: |
+          node -e '
+          const fs = require("fs");
+          const zlib = require("zlib");
+          const path = require("path");
+
+          const TIERS = [
+            { id: 1, name: "tier1_facile", minDiff: 1, maxDiff: 3, count: 2000000 },
+            { id: 2, name: "tier2_moyen", minDiff: 4, maxDiff: 6, count: 3000000 },
+            { id: 3, name: "tier3_difficile", minDiff: 7, maxDiff: 8, count: 3000000 },
+            { id: 4, name: "tier4_expert", minDiff: 9, maxDiff: 10, count: 2000000 }
+          ];
+
+          const NOUNS = ["SOLEIL","LUNE","ETOILE","TERRE","OCEAN","FLEUVE","MONTAGNE","FORET","DESERT","VOLCAN","CIEL","NUAGE","PLUIE","NEIGE","ORAGE","ECLAIR","VENT","TEMPETE","FEU","FLAMME","BRAISE","CENDRE","FUMEE","LUMIERE","OMBRE","CHALEUR","EAU","GLACE","VAPEUR","SOURCE","CASCADE","LAC","RIVIERE","VAGUE","ARBRE","FLEUR","RACINE","BRANCHE","FEUILLE","GRAINE","LION","AIGLE","LOUP","SERPENT","TIGRE","FAUCON","REQUIN","DAUPHIN","BALEINE","LIVRE","PLUME","ENCRE","PAGE","HISTOIRE","POEME","CHATEAU","PALAIS","FORTERESSE","TOUR","PONT","ROUTE","TEMPLE","EPEE","BOUCLIER","FLECHE","ARC","ARMURE","CASQUE","COURONNE","COEUR","ESPRIT","PENSEE","MEMOIRE","REVE","ESPOIR","COURAGE","FORCE","SAGESSE","DESTIN","MUSIQUE","NOTE","MELODIE","RYTHME","CHANT","TEMPS","HEURE","MINUTE","SECONDE","SIECLE","OR","ARGENT","BRONZE","FER","ACIER","DIAMANT","RUBIS","VOYAGE","CHEMIN","BOUSSOLE","CARTE","NAVIRE","PORT","ILE"];
+          const VERBS = ["VOLER","COURIR","NAGER","MARCHER","GRIMPER","SAUTER","GLISSER","PLONGER","FLOTTER","BRILLER","ECLAIRER","RAYONNER","SCINTILLER","LUIRE","FLAMBOYER","ILLUMINER","BRULER","CONSUMER","ENFLAMMER","CHAUFFER","FONDRE","COULER","JAILLIR","ONDULER","RUISSELLER","INONDER","SUBMERGER","DEBORDER","ECRIRE","DESSINER","PEINDRE","SCULPTER","TRACER","GRAVER","COMPOSER","IMAGINER","CREER","FORGER","COMBATTRE","DEFENDRE","ATTAQUER","PROTEGER","VAINCRE","TRIOMPHER","CHANTER","JOUER","RESONNER","VIBRER","PENSER","MEDITER","REFLECHIR","CONTEMPLER","SONGER","REVER","GUIDER","DIRIGER","NAVIGUER","ORIENTER","PILOTER","MENER"];
+          const ADJS = ["RAPIDE","LENT","PUISSANT","AGILE","VIF","LEGER","LOURD","DUR","SOUPLE","BRILLANT","SOMBRE","LUMINEUX","OBSCUR","ECLATANT","RADIEUX","TERNE","CHAUD","FROID","BRULANT","GLACIAL","TIEDE","IMMENSE","MINUSCULE","GEANT","COLOSSAL","INFINI","VASTE","PROFOND","HAUT","ANCIEN","NOUVEAU","ANTIQUE","MODERNE","ETERNEL","EPHEMERE","PRECIEUX","RARE","DORE","ARGENTE","PUR","NOBLE","MYSTERIEUX","SECRET","CACHE","ENIGMATIQUE","SACRE","MAGIQUE","LEGENDAIRE","DIVIN"];
+
+          const CLUES = {
+            nouns: ["Element fondamental qui les relie", "Concept commun a ces deux elements", "Ce qui unit ces deux symboles", "Leur essence commune"],
+            verbs: ["Action dynamique qui les associe", "Ce que l on fait avec ces deux elements", "Mouvement ou processus les unissant"],
+            adjectives: ["Qualite frappante qui les caracterise", "Attribut commun a ces deux notions", "Ce qui decrit leur etat"]
+          };
+
+          fs.mkdirSync("vault_packs", { recursive: true });
+
+          let globalId = 1;
+          for (const tier of TIERS) {
+            console.log(`Generation de ${tier.name} (${tier.count} enigmes)...`);
+            const enigmas = [];
+            for (let i = 0; i < tier.count; i++) {
+              const cat = i % 3 === 0 ? "verbs" : (i % 3 === 1 ? "adjectives" : "nouns");
+              const pool = cat === "verbs" ? VERBS : (cat === "adjectives" ? ADJS : NOUNS);
+              const type = cat === "verbs" ? "v" : (cat === "adjectives" ? "adj" : "nom");
+
+              const r1 = Math.floor(Math.random() * pool.length);
+              let r2 = (r1 + 1 + Math.floor(Math.random() * (pool.length - 1))) % pool.length;
+              let rAns = (r2 + 1 + Math.floor(Math.random() * (pool.length - 2))) % pool.length;
+              let rD1 = (rAns + 1 + Math.floor(Math.random() * (pool.length - 3))) % pool.length;
+              let rD2 = (rD1 + 1 + Math.floor(Math.random() * (pool.length - 4))) % pool.length;
+
+              const clueArr = CLUES[cat];
+              const clue = clueArr[i % clueArr.length];
+              const diff = tier.minDiff + (i % (tier.maxDiff - tier.minDiff + 1));
+
+              enigmas.push([
+                globalId++,
+                pool[r1],
+                pool[r2],
+                pool[rAns],
+                clue,
+                diff,
+                type,
+                pool[rD1],
+                pool[rD2]
+              ]);
+            }
+
+            const rawJson = JSON.stringify(enigmas);
+            const gzipped = zlib.gzipSync(Buffer.from(rawJson));
+            fs.writeFileSync(path.join("vault_packs", `${tier.name}.json.gz`), gzipped);
+            console.log(`Termine : ${tier.name}.json.gz (${(gzipped.length / 1024 / 1024).toFixed(2)} Mo)`);
+          }
+          '
+
+      - name: Publication automatique dans la Release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: Initial Vault Release
+          draft: false
+          prerelease: false
+          files: vault_packs/*.json.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
