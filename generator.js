@@ -1,5 +1,4 @@
 const fs = require('fs');
-const https = require('https');
 const zlib = require('zlib');
 const path = require('path');
 
@@ -12,53 +11,41 @@ if (!API_KEY) {
 const BATCHES = 3;
 
 const TIERS = [
-  { id: 1, name: 'tier1_facile', diff: 'Niveau Débutant (Niv 1-10) : Objets simples du quotidien, nature évidente, animaux, actions familières.' },
-  { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermédiaire (Niv 11-30) : Métiers, sciences, sports, géographie, cuisine, culture.' },
-  { id: 3, name: 'tier3_difficile', diff: 'Niveau Avancé (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes.' },
-  { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maître (Niv 61-100+) : Littérature, mythologie, vocabulaire noble, alchimie, philosophie.' }
+  { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, animaux, actions familieres.' },
+  { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture.' },
+  { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes.' },
+  { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie, philosophie.' }
 ];
 
 const THEMES = [
   "Sciences & Espace", "Nature & Animaux", "Histoire & Civilisations",
   "Cuisine & Terroir", "Arts & Musique", "Sports & Aventure",
-  "Objets & Outils", "Sensations & Émotions"
+  "Objets & Outils", "Sensations & Emotions"
 ];
 
-function callGemini(prompt) {
-  return new Promise((resolve, reject) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-    const payload = JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
-    });
-
-    const req = https.request(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload)
+async function callGemini(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.85,
+        responseMimeType: "application/json"
       }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.error) {
-            return reject(new Error("API Gemini Error: " + JSON.stringify(parsed.error)));
-          }
-          let text = parsed.candidates[0].content.parts[0].text;
-          text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-          resolve(JSON.parse(text));
-        } catch (e) {
-          reject(new Error("Réponse brute invalide : " + data.substring(0, 200)));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
+    })
   });
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Gemini API Error: ${data.error.message}`);
+  }
+
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!rawText) throw new Error("Reponse vide de Gemini");
+  return JSON.parse(rawText);
 }
 
 async function sleep(ms) {
@@ -70,7 +57,7 @@ async function run() {
   let globalId = 1;
 
   for (const tier of TIERS) {
-    console.log(`\n=== Génération IA pour ${tier.name} ===`);
+    console.log(`\n=== Generation IA pour ${tier.name} ===`);
     const pool = [];
     const seenCombos = new Set();
 
@@ -79,16 +66,15 @@ async function run() {
       console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
 
       const prompt = `Tu es le concepteur en chef du jeu "2Mots".
-Réponds UNIQUEMENT par un tableau JSON brut contenant 25 énigmes sémantiques 100% FRANÇAISES, HAUTEMENT LOGIQUES et INGÉNIEUSES.
+Genere un tableau JSON contenant 25 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
 
-Difficulté requise : ${tier.diff}
-Thématique : ${theme}
+Difficulte requise : ${tier.diff}
+Thematique : ${theme}
 
-RÈGLES ABSOLUES :
-1. LE LIEN SÉMANTIQUE DOIT ÊTRE ÉVIDENT OU ASTUCIEUX : word1 + word2 mènent à answer (ex: SOLEIL + PLUIE -> ARC-EN-CIEL, VOLANT + PLUME -> BADMINTON, VOLCAN + LAVE -> EXPLOSER).
-2. ZÉRO ASSOCIATION ALÉATOIRE INCOMPRÉHENSIBLE.
-3. NATURE GRAMMATICALE IDENTIQUE : answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la même nature (3 verbes, ou 3 noms, ou 3 adjectifs).
-4. INDICE PRÉCIS ET CONTEXTUEL : L'indice "clue" décrit la passerelle avec élégance sans révéler le mot.
+REGLES ABSOLUES :
+1. LE LIEN SEMANTIQUE DOIT ETRE EVIDENT OU ASTUCIEUX : word1 + word2 menent indiscutablement a answer (ex: SOLEIL + PLUIE -> ARC-EN-CIEL, VOLANT + PLUME -> BADMINTON, VOLCAN + LAVE -> EXPLOSER).
+2. NATURE GRAMMATICALE IDENTIQUE : answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature (3 verbes a l infinitif, 3 noms, ou 3 adjectifs).
+3. INDICE CONTEXTUEL : L indice "clue" decrit la passerelle avec precision et elegance sans reveler le mot.
 
 Format JSON attendu :
 [
@@ -96,7 +82,7 @@ Format JSON attendu :
     "word1": "VOLANT",
     "word2": "PLUME",
     "answer": "BADMINTON",
-    "clue": "Sport de raquette rapide et aérien",
+    "clue": "Sport de raquette rapide et aerien",
     "difficulty": ${tier.id === 1 ? 1 : tier.id === 2 ? 4 : tier.id === 3 ? 7 : 9},
     "type": "nom",
     "distractor1": "TENNIS",
@@ -124,27 +110,31 @@ Format JSON attendu :
               w1,
               w2,
               ans,
-              item.clue || "Point commun sémantique",
+              item.clue || "Point commun semantique",
               item.difficulty || (tier.id * 2),
               item.type || "nom",
               d1,
               d2
             ]);
           }
-          console.log(` -> Reçu +${enigmas.length} énigmes de l'IA`);
+          console.log(` -> Reçu +${enigmas.length} énigmes de l'IA (Total palier: ${pool.length})`);
         }
       } catch (err) {
-        console.warn(`Avertissement :`, err.message);
+        console.error(`Erreur sur le lot ${b + 1} :`, err.message);
       }
 
-      await sleep(2000);
+      await sleep(1500);
+    }
+
+    if (pool.length === 0) {
+      throw new Error(`Aucune enigme generee pour ${tier.name}`);
     }
 
     const raw = JSON.stringify(pool);
     const gz = zlib.gzipSync(Buffer.from(raw));
     const destPath = path.join('vault_packs', `${tier.name}.json.gz`);
     fs.writeFileSync(destPath, gz);
-    console.log(`[Succès] ${tier.name}.json.gz sauvegardé (${pool.length} énigmes).`);
+    console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes, ${(gz.length / 1024).toFixed(1)} Ko).`);
   }
 }
 
