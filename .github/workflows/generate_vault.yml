@@ -4,11 +4,9 @@ on:
   schedule:
     - cron: '0 0 1 * *'
   workflow_dispatch:
-    inputs:
-      batches_per_tier:
-        description: 'Nombre de lots par palier'
-        required: true
-        default: '3'
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -29,7 +27,6 @@ jobs:
       - name: Generation des Enigmes IA par Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BATCH_COUNT: ${{ github.event.inputs.batches_per_tier || '3' }}
         run: |
           cat << 'EOF' > generate_ai_vault.js
           const fs = require('fs');
@@ -43,7 +40,7 @@ jobs:
             process.exit(1);
           }
 
-          const BATCHES = parseInt(process.env.BATCH_COUNT || '3', 10);
+          const BATCHES = 3;
 
           const TIERS = [
             { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, actions familieres.' },
