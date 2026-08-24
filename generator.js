@@ -12,7 +12,7 @@ if (!API_KEY) {
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 const BATCHES = 3;
-const TARGET_PER_TIER = 50000; // 50 000 énigmes par palier = fichiers de ~5 Mo
+const TARGET_PER_TIER = 50000; // 50 000 énigmes par palier (~5 Mo par fichier)
 
 const TIERS = [
   { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, animaux, actions familieres. Mots simples.' },
@@ -27,7 +27,6 @@ const THEMES = [
   "Objets & Outils", "Sensations & Emotions"
 ];
 
-// Détection automatique du meilleur modèle actif sur votre clé API
 async function detectBestModel() {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
@@ -37,26 +36,22 @@ async function detectBestModel() {
         .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
         .map(m => m.name.replace('models/', ''));
       
-      console.log("Modeles supportes par votre cle API :", supported);
+      console.log("Modeles supportes :", supported);
       const preferences = [
-        'gemini-2.5-flash-lite',
-        'gemini-flash-lite-latest',
+        'gemini-3.5-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
         'gemini-flash-latest',
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-latest',
-        'gemini-2.5-flash',
-        'gemini-pro'
+        'gemini-pro-latest'
       ];
 
       for (const pref of preferences) {
         if (supported.includes(pref)) return pref;
       }
-      return supported[0] || 'gemini-2.5-flash';
+      return supported[0] || 'gemini-3.5-flash-lite';
     }
-  } catch (e) {
-    console.warn("Detection auto impossible :", e.message);
-  }
-  return 'gemini-2.5-flash';
+  } catch (e) {}
+  return 'gemini-3.5-flash-lite';
 }
 
 async function sleep(ms) {
@@ -69,9 +64,7 @@ async function run() {
 
   const model = genAI.getGenerativeModel({
     model: chosenModelName,
-    generationConfig: {
-      temperature: 0.85
-    }
+    generationConfig: { temperature: 0.85 }
   });
 
   fs.mkdirSync('vault_packs', { recursive: true });
@@ -148,7 +141,7 @@ Format JSON attendu :
               d2
             ]);
           }
-          console.log(` -> Reçu +${enigmas.length} énigmes d elite de Gemini`);
+          console.log(` -> Reçu +${enigmas.length} énigmes d elite de Gemini 3.5`);
         }
       } catch (err) {
         console.error(`Erreur lot ${b + 1} :`, err.message);
