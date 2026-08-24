@@ -1,4 +1,4 @@
-name: Generate AI Semantic Vault with Gemini
+name: Generate AI Semantic Vault
 
 on:
   schedule:
@@ -14,7 +14,6 @@ permissions:
 jobs:
   build-ai-vault:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout du depot
         uses: actions/checkout@v4
@@ -24,169 +23,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Generation des Enigmes IA par Gemini
+      - name: Execution du Generateur IA
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          cat << 'EOF' > generate_ai_vault.js
-          const fs = require('fs');
-          const https = require('https');
-          const zlib = require('zlib');
-          const path = require('path');
+        run: node generator.js
 
-          const API_KEY = process.env.GEMINI_API_KEY;
-          if (!API_KEY) {
-            console.error("ERREUR CRITIQUE : GEMINI_API_KEY est absente des Secrets GitHub !");
-            process.exit(1);
-          }
-
-          const BATCHES = 3;
-
-          const TIERS = [
-            { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, actions familieres.' },
-            { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture.' },
-            { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes.' },
-            { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie.' }
-          ];
-
-          const THEMES = [
-            "Sciences & Espace", "Nature & Animaux", "Histoire & Civilisations",
-            "Cuisine & Terroir", "Arts & Musique", "Sports & Aventure",
-            "Objets & Outils", "Sensations & Emotions"
-          ];
-
-          function callGemini(prompt) {
-            return new Promise((resolve, reject) => {
-              const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-              const payload = JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-              });
-
-              const req = https.request(url, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(payload)
-                }
-              }, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                  try {
-                    const parsed = JSON.parse(data);
-                    if (parsed.error) {
-                      return reject(new Error("API Gemini Error: " + JSON.stringify(parsed.error)));
-                    }
-                    let text = parsed.candidates[0].content.parts[0].text;
-                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-                    resolve(JSON.parse(text));
-                  } catch (e) {
-                    reject(new Error("Reponse brute invalide : " + data.substring(0, 300)));
-                  }
-                });
-              });
-
-              req.on('error', reject);
-              req.write(payload);
-              req.end();
-            });
-          }
-
-          async function sleep(ms) {
-            return new Promise(r => setTimeout(r, ms));
-          }
-
-          async function run() {
-            fs.mkdirSync('vault_packs', { recursive: true });
-            let globalId = 1;
-
-            for (const tier of TIERS) {
-              console.log(`\n=== Generation IA pour ${tier.name} ===`);
-              const pool = [];
-              const seenCombos = new Set();
-
-              for (let b = 0; b < BATCHES; b++) {
-                const theme = THEMES[b % THEMES.length];
-                console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
-
-                const prompt = `Tu es le concepteur du jeu "2Mots".
-Reponds UNIQUEMENT par un tableau JSON brut contenant 25 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
-
-Difficulte : ${tier.diff}
-Theme : ${theme}
-
-REGLES :
-1. word1 + word2 doivent mener logiquement et avec evidence a "answer".
-2. answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature grammaticale (3 verbes, 3 noms ou 3 adjectifs).
-3. L indice "clue" doit etre precis, contextuel et sans phrase generique.
-
-Format JSON attendu :
-[
-  {
-    "word1": "VOLANT",
-    "word2": "PLUME",
-    "answer": "BADMINTON",
-    "clue": "Sport de raquette rapide et aerien",
-    "difficulty": ${tier.id === 1 ? 1 : tier.id === 2 ? 4 : tier.id === 3 ? 7 : 9},
-    "type": "nom",
-    "distractor1": "TENNIS",
-    "distractor2": "SQUASH"
-  }
-]`;
-
-                try {
-                  const enigmas = await callGemini(prompt);
-                  if (Array.isArray(enigmas)) {
-                    for (const item of enigmas) {
-                      if (!item.word1 || !item.word2 || !item.answer) continue;
-                      const w1 = String(item.word1).toUpperCase().trim();
-                      const w2 = String(item.word2).toUpperCase().trim();
-                      const ans = String(item.answer).toUpperCase().trim();
-                      const key = `${w1}#${w2}#${ans}`;
-                      if (seenCombos.has(key)) continue;
-                      seenCombos.add(key);
-
-                      const d1 = String(item.distractor1 || 'CHOIX A').toUpperCase().trim();
-                      const d2 = String(item.distractor2 || 'CHOIX B').toUpperCase().trim();
-
-                      pool.push([
-                        globalId++,
-                        w1,
-                        w2,
-                        ans,
-                        item.clue || "Point commun semantique",
-                        item.difficulty || (tier.id * 2),
-                        item.type || "nom",
-                        d1,
-                        d2
-                      ]);
-                    }
-                    console.log(` -> Reussi (+${enigmas.length} enigmes)`);
-                  }
-                } catch (err) {
-                  console.warn(`Avertissement :`, err.message);
-                }
-
-                await sleep(2000);
-              }
-
-              const raw = JSON.stringify(pool);
-              const gz = zlib.gzipSync(Buffer.from(raw));
-              const destPath = path.join('vault_packs', `${tier.name}.json.gz`);
-              fs.writeFileSync(destPath, gz);
-              console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes).`);
-            }
-          }
-
-          run().catch((err) => {
-            console.error("Erreur critique :", err);
-            process.exit(1);
-          });
-          EOF
-
-          node generate_ai_vault.js
-
-      - name: Publication automatique dans la Release GitHub
+      - name: Publication dans la Release GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
