@@ -10,7 +10,6 @@ if (!API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
-
 const BATCHES = 3;
 
 const TIERS = [
@@ -26,7 +25,6 @@ const THEMES = [
   "Objets & Outils", "Sensations & Emotions"
 ];
 
-// Détection automatique du meilleur modèle actif sur votre clé API
 async function detectBestModel() {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
@@ -36,16 +34,8 @@ async function detectBestModel() {
         .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
         .map(m => m.name.replace('models/', ''));
       
-      console.log("Modeles supportes par votre cle API :", supported);
-      const preferences = [
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash-8b',
-        'gemini-pro',
-        'gemini-2.0-flash'
-      ];
-
+      console.log("Modeles supportes :", supported);
+      const preferences = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro'];
       for (const pref of preferences) {
         if (supported.includes(pref)) return pref;
       }
@@ -67,16 +57,14 @@ async function run() {
 
   const model = genAI.getGenerativeModel({
     model: chosenModelName,
-    generationConfig: {
-      temperature: 0.85
-    }
+    generationConfig: { temperature: 0.85 }
   });
 
   fs.mkdirSync('vault_packs', { recursive: true });
   let globalId = 1;
 
   for (const tier of TIERS) {
-    console.log(`\n=== Generation IA pour ${tier.name} ===`);
+    console.log(`\n=== Generation IA d Elite pour ${tier.name} ===`);
     const pool = [];
     const seenCombos = new Set();
 
@@ -84,28 +72,34 @@ async function run() {
       const theme = THEMES[b % THEMES.length];
       console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
 
-      const prompt = `Tu es le concepteur en chef du jeu "2Mots".
-Reponds UNIQUEMENT par un tableau JSON brut sans balises markdown contenant 20 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
+      const prompt = `Tu es le Grand Concepteur du jeu de reflexion intellectuel "2Mots".
+Genere un tableau JSON brut sans balises markdown contenant 20 enigmes de TRES HAUTE QUALITE LOGIQUE ET SEMANTIQUE.
 
-Difficulte requise : ${tier.diff}
-Thematique : ${theme}
+Difficulte : ${tier.diff}
+Theme : ${theme}
 
-REGLES ABSOLUES :
-1. LE LIEN SEMANTIQUE DOIT ETRE EVIDENT OU ASTUCIEUX : word1 + word2 menent indiscutablement a answer (ex: SOLEIL + PLUIE -> ARC-EN-CIEL, VOLANT + PLUME -> BADMINTON, VOLCAN + LAVE -> EXPLOSER).
-2. NATURE GRAMMATICALE IDENTIQUE : answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature (3 verbes a l infinitif, 3 noms, ou 3 adjectifs).
-3. INDICE CONTEXTUEL : L indice "clue" decrit la passerelle avec precision et elegance sans reveler le mot.
+REGLES D OR DU JEU :
+1. LOGIQUE SANS FAILLE : Le mot1 et le mot2 doivent pointer avec une evidence éclatante ou une astuce imparable vers la solution.
+2. VRAIS PIÈGES CONTEXTUELS OBLIGATOIRES (IMPORTANTISSIME) :
+   - Les 2 distracteurs ("distractor1" et "distractor2") DOIVENT appartenir AU MEME UNIVERS CONTEXTUEL que l enigme.
+   - INTERDICTION des pieges absurdes hors sujet (ex: interdiction de mettre "Nager" pour "FUSEE + CIEL" ; mets plutot "DECOLLER" ou "PROPULSER").
+   - Exemple parfait pour "COUTEAU + PAIN" : reponse "COUPER", pieges "TRANCHER", "TARTINER".
+   - Exemple parfait pour "CHAMPAGNE + COUPE" : reponse "PETILLER", pieges "MOUSSER", "TRINQUER".
+   - Exemple parfait pour "ARC + FLECHE" : reponse "TIRER", pieges "VISER", "DECOCHER".
+3. STRICTE IDENTITE GRAMMATICALE : 3 verbes ensemble, ou 3 noms ensemble, ou 3 adjectifs ensemble.
+4. INDICE CONTEXTUEL RAFFINE : L indice decrit avec precision la passerelle sans reveler le mot.
 
 Format JSON attendu :
 [
   {
-    "word1": "VOLANT",
-    "word2": "PLUME",
-    "answer": "BADMINTON",
-    "clue": "Sport de raquette rapide et aerien",
+    "word1": "FUSEE",
+    "word2": "CIEL",
+    "answer": "DECOLLER",
+    "clue": "Quitter la terre ferme a toute allure",
     "difficulty": ${tier.id === 1 ? 1 : tier.id === 2 ? 4 : tier.id === 3 ? 7 : 9},
-    "type": "nom",
-    "distractor1": "TENNIS",
-    "distractor2": "SQUASH"
+    "type": "verbe",
+    "distractor1": "PROPULSER",
+    "distractor2": "PLANER"
   }
 ]`;
 
@@ -140,7 +134,7 @@ Format JSON attendu :
               d2
             ]);
           }
-          console.log(` -> Reçu +${enigmas.length} énigmes de l'IA (Total palier: ${pool.length})`);
+          console.log(` -> Reçu +${enigmas.length} énigmes d elite (Total palier: ${pool.length})`);
         }
       } catch (err) {
         console.error(`Erreur lot ${b + 1} :`, err.message);
