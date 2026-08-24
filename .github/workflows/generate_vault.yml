@@ -1,8 +1,8 @@
-name: Generate 10M Infinite Vault
+name: Generate Logical Infinite Vault
 
 on:
   schedule:
-    - cron: '0 0 1 * *' # S'exécute automatiquement le 1er de chaque mois à minuit
+    - cron: '0 0 1 * *'
   workflow_dispatch:
   push:
     branches:
@@ -24,68 +24,130 @@ jobs:
         with:
           node-version: 20
 
-      - name: Génération des 10 Millions d'Énigmes par Paliers
+      - name: Génération des Énigmes 100% Logiques et Vérifiées par Paliers
         run: |
           node -e '
           const fs = require("fs");
           const zlib = require("zlib");
           const path = require("path");
 
-          const TIERS = [
-            { id: 1, name: "tier1_facile", minDiff: 1, maxDiff: 3, count: 2000000 },
-            { id: 2, name: "tier2_moyen", minDiff: 4, maxDiff: 6, count: 3000000 },
-            { id: 3, name: "tier3_difficile", minDiff: 7, maxDiff: 8, count: 3000000 },
-            { id: 4, name: "tier4_expert", minDiff: 9, maxDiff: 10, count: 2000000 }
+          const LOGICAL_TEMPLATES = [
+            // --- PALIER 1 : DÉBUTANT (Niv 1-10) ---
+            { tier: 1, diff: 1, w1: "SOLEIL", w2: "PLUIE", ans: "ARC-EN-CIEL", clue: "Spectre colore qui apparait dans le ciel", type: "nom", d1: "ORAGE", d2: "NUAGE" },
+            { tier: 1, diff: 1, w1: "CHALEUR", w2: "EAU", ans: "BOUILLIR", clue: "Passer a 100 degres sous l effet du feu", type: "v", d1: "FONDRE", d2: "GELER" },
+            { tier: 1, diff: 1, w1: "VOITURE", w2: "VOLANT", ans: "CONDUIRE", clue: "Action de diriger un vehicule sur la route", type: "v", d1: "ROULER", d2: "FREINER" },
+            { tier: 1, diff: 1, w1: "NUIT", w2: "CIEL", ans: "LUNE", clue: "Astre qui eclaire la nuit sombre", type: "nom", d1: "ETOILE", d2: "SOLEIL" },
+            { tier: 1, diff: 1, w1: "EAU", w2: "SAVON", ans: "LAVER", clue: "Action indispensable pour rester propre", type: "v", d1: "MOUILLER", d2: "FROTTER" },
+            { tier: 1, diff: 1, w1: "CRAYON", w2: "FEUILLE", ans: "DESSINER", clue: "Tracer des formes et des esquisses", type: "v", d1: "ECRIRE", d2: "COLORIER" },
+            { tier: 1, diff: 1, w1: "OISEAU", w2: "ARBRE", ans: "NID", clue: "Abri naturel pour couver les oeufs", type: "nom", d1: "CAGE", d2: "BRANCHE" },
+            { tier: 1, diff: 1, w1: "GLACE", w2: "CHALEUR", ans: "FONDRE", clue: "Passer de l etat solide a liquide", type: "v", d1: "COULER", d2: "EVAPORER" },
+            { tier: 1, diff: 1, w1: "CLE", w2: "SERRURE", ans: "OUVRIR", clue: "Action pour debloquer un acces ferme", type: "v", d1: "FERMER", d2: "TOURNER" },
+            { tier: 1, diff: 1, w1: "ABEILLE", w2: "FLEUR", ans: "MIEL", clue: "Substance sucree doree et bienfaisante", type: "nom", d1: "POLLEN", d2: "SUCRE" },
+            { tier: 1, diff: 1, w1: "LIVRE", w2: "YEUX", ans: "LIRE", clue: "Dechiffrer des phrases et des histoires", type: "v", d1: "REGARDER", d2: "APPRENDRE" },
+            { tier: 1, diff: 2, w1: "MER", w2: "VENT", ans: "VAGUE", clue: "Mouvement d eau deferlant sur la plage", type: "nom", d1: "MAREE", d2: "COURANT" },
+            { tier: 1, diff: 2, w1: "FEU", w2: "BOIS", ans: "CENDRE", clue: "Residu grisatre apres combustion", type: "nom", d1: "FUMEE", d2: "CHARBON" },
+            { tier: 1, diff: 1, w1: "NEIGE", w2: "MONTAGNE", ans: "SKIER", clue: "Glisser a toute vitesse sur la pente blanche", type: "v", d1: "MARCHER", d2: "GRIMPER" },
+            { tier: 1, diff: 1, w1: "MUSIQUE", w2: "PIEDS", ans: "DANSER", clue: "Bouger son corps en rythme avec la melodie", type: "v", d1: "SAUTER", d2: "MARCHER" },
+            { tier: 1, diff: 1, w1: "COUTEAU", w2: "PAIN", ans: "COUPER", clue: "Trancher nettement avec une lame affutee", type: "v", d1: "MANGER", d2: "CUIRE" },
+            { tier: 1, diff: 1, w1: "OISEAU", w2: "AIR", ans: "VOLER", clue: "Se deplacer librement dans les airs", type: "v", d1: "PLANER", d2: "FLOTTER" },
+            { tier: 1, diff: 1, w1: "DENT", w2: "BROSSE", ans: "DENTIFRICE", clue: "Pate nettoyante rafraichissante pour l hygiene", type: "nom", d1: "SAVON", d2: "SHAMPOING" },
+            { tier: 1, diff: 1, w1: "FARINE", w2: "LEVURE", ans: "PAIN", clue: "Aliment universel dore cuit au four", type: "nom", d1: "GATEAU", d2: "BRIOCHE" },
+            { tier: 1, diff: 1, w1: "LAIT", w2: "FROID", ans: "GLACE", clue: "Dessert onctueux rafraichissant et sucre", type: "nom", d1: "YAOURT", d2: "FROMAGE" },
+            { tier: 1, diff: 1, w1: "CAFE", w2: "MATIN", ans: "REVEIL", clue: "Moment qui met fin au sommeil quotidien", type: "nom", d1: "PETIT-DEJEUNER", d2: "TRAVAIL" },
+            { tier: 1, diff: 1, w1: "PIED", w2: "SOL", ans: "MARCHER", clue: "Se deplacer pas a pas a son rythme", type: "v", d1: "COURIR", d2: "SAUTER" },
+            { tier: 1, diff: 2, w1: "SPORT", w2: "EFFORT", ans: "SUEUR", clue: "Secretion corporelle liee a l activite intense", type: "nom", d1: "FATIGUE", d2: "LARMES" },
+            { tier: 1, diff: 1, w1: "POISSON", w2: "EAU", ans: "NAGER", clue: "Se propulser avec aisance en milieu aquatique", type: "v", d1: "PLONGER", d2: "FLOTTER" },
+            { tier: 1, diff: 2, w1: "THE", w2: "EAU", ans: "INFUSER", clue: "Extraire les aromes bienfaisants dans l eau chaude", type: "v", d1: "TREMPER", d2: "BOUILLIR" },
+
+            // --- PALIER 2 : INTERMÉDIAIRE (Niv 11-30) ---
+            { tier: 2, diff: 4, w1: "CHAMPAGNE", w2: "COUPE", ans: "PETILLER", clue: "Formation continue de fines bulles elegantes", type: "v", d1: "MOUSSER", d2: "TRINQUER" },
+            { tier: 2, diff: 4, w1: "FER", w2: "HUMIDITE", ans: "ROUILLE", clue: "Couche d oxydation rougeatre sur le metal", type: "nom", d1: "PEINTURE", d2: "MOUSSE" },
+            { tier: 2, diff: 5, w1: "BOUSSOLE", w2: "NORD", ans: "ORIENTER", clue: "Indiquer precisement la bonne direction", type: "v", d1: "GUIDER", d2: "POINTER" },
+            { tier: 2, diff: 4, w1: "LOUP", w2: "LUNE", ans: "HURLER", clue: "Pousser un cri puissant et prolonge dans la nuit", type: "v", d1: "ABOYER", d2: "RUGIR" },
+            { tier: 2, diff: 4, w1: "ARBRE", w2: "AUTOMNE", ans: "TOMBER", clue: "Action pour le feuillage dore de se detacher", type: "v", d1: "JAUNIR", d2: "SECHER" },
+            { tier: 2, diff: 5, w1: "OR", w2: "BIJOU", ans: "ORFEVRERIE", clue: "Metier d art noble pour travailler les parures", type: "nom", d1: "JOAILLERIE", d2: "FORGE" },
+            { tier: 2, diff: 4, w1: "MOTEUR", w2: "ESSENCE", ans: "TOURNER", clue: "Transformer l energie en mouvement mecanique", type: "v", d1: "ACCELERER", d2: "BRULER" },
+            { tier: 2, diff: 4, w1: "ENCRE", w2: "PLUME", ans: "ECRIRE", clue: "Tracer des phrases et lettres manuscrites", type: "v", d1: "DESSINER", d2: "SIGNER" },
+            { tier: 2, diff: 5, w1: "ARC", w2: "FLECHE", ans: "TIRER", clue: "Propulser le projectile vers sa cible", type: "v", d1: "VISER", d2: "LANCER" },
+            { tier: 2, diff: 5, w1: "VOILE", w2: "SECRET", ans: "LEVER", clue: "Rendre public et visible ce qui etait cache", type: "v", d1: "DECOUVRIR", d2: "TRAHIR" },
+            { tier: 2, diff: 5, w1: "SABLIER", w2: "SABLE", ans: "ECOULER", clue: "Glisser grain par grain de haut en bas", type: "v", d1: "PASSER", d2: "MESURER" },
+            { tier: 2, diff: 5, w1: "MIROIR", w2: "LUMIERE", ans: "REFLECHIR", clue: "Renvoyer une image fidele sans l absorber", type: "v", d1: "RENVOYER", d2: "PROJETER" },
+            { tier: 2, diff: 4, w1: "CLOCHE", w2: "EGLISE", ans: "SONNER", clue: "Produire une vibration sonore qui retentit au loin", type: "v", d1: "TINTER", d2: "VIBRER" },
+            { tier: 2, diff: 5, w1: "SERPENT", w2: "VENIN", ans: "MORDRE", clue: "Injecter une toxine avec ses crochets", type: "v", d1: "PIQUER", d2: "EMPOISONNER" },
+            { tier: 2, diff: 6, w1: "DIAMANT", w2: "VERRE", ans: "GRAVER", clue: "Tracer une marque incisive avec une pointe dure", type: "v", d1: "RAYER", d2: "CASSER" },
+            { tier: 2, diff: 4, w1: "HIVER", w2: "SOMMEIL", ans: "HIBERNATION", clue: "Sommeil prolongateur pour passer la saison froide", type: "nom", d1: "LETHARGIE", d2: "REPOS" },
+            { tier: 2, diff: 4, w1: "NUAGE", w2: "FROID", ans: "NEIGE", clue: "Precipitation blanche sous forme de cristaux", type: "nom", d1: "GRELE", d2: "GIVRE" },
+            { tier: 2, diff: 4, w1: "VITESSE", w2: "FREIN", ans: "RALENTIR", clue: "Reduire progressivement l allure du deplacement", type: "v", d1: "STOPPER", d2: "DECELERER" },
+            { tier: 2, diff: 5, w1: "TERRE", w2: "GRAINE", ans: "GERMER", clue: "Donner naissance a une jeune pousse vivante", type: "v", d1: "POUSSER", d2: "FLEURIR" },
+            { tier: 2, diff: 4, w1: "VENT", w2: "NAVIRE", ans: "VOILE", clue: "Piece de tissu capteur d energie pour naviguer", type: "nom", d1: "MAT", d2: "GOUVERNAIL" },
+            { tier: 2, diff: 4, w1: "TEMPETE", w2: "LUMIERE", ans: "ECLAIR", clue: "Lueur vive et fulgurante zebrant les nuages", type: "nom", d1: "FOUDRE", d2: "TONNERRE" },
+            { tier: 2, diff: 4, w1: "OBSCURITE", w2: "PILE", ans: "LAMPE", clue: "Dispositif lumineux portatif indispensable", type: "nom", d1: "TORCHE", d2: "BOUGIE" },
+            { tier: 2, diff: 5, w1: "POMME", w2: "TERRE", ans: "GRAVITE", clue: "Force universelle d attraction vers le sol", type: "nom", d1: "PESANTEUR", d2: "AIMANT" },
+            { tier: 2, diff: 4, w1: "ARGENT", w2: "BANQUE", ans: "EPARGNER", clue: "Mettre de cote ses ressources avec precaution", type: "v", d1: "PLACER", d2: "DEPENSER" },
+            { tier: 2, diff: 4, w1: "VERRE", w2: "CHOC", ans: "BRISER", clue: "Action de voler en eclats sous l impact", type: "v", d1: "CASSER", d2: "FISSURER" },
+
+            // --- PALIER 3 : AVANCÉ (Niv 31-60) ---
+            { tier: 3, diff: 7, w1: "ECHO", w2: "SILENCE", ans: "ROMPRE", clue: "Mettre fin brusquement a la quietude ambiante", type: "v", d1: "TROUBLER", d2: "RESONNER" },
+            { tier: 3, diff: 7, w1: "ECLAT", w2: "DIAMANT", ans: "SCINTILLER", clue: "Briller d une vive lumiere aux mille reflets", type: "v", d1: "RAYONNER", d2: "LUIRE" },
+            { tier: 3, diff: 7, w1: "AIMANT", w2: "FER", ans: "ATTIRER", clue: "Exercer une attraction physique invisible", type: "v", d1: "CAPTURER", d2: "POLARISER" },
+            { tier: 3, diff: 8, w1: "VOLCAN", w2: "LAVE", ans: "EXPLOSER", clue: "Eclater avec fracas sous une forte pression", type: "v", d1: "CRATERE", d2: "DEBORDER" },
+            { tier: 3, diff: 7, w1: "PENDULE", w2: "TEMPS", ans: "OSCILLER", clue: "Mouvement alternatif regulier de balancement", type: "v", d1: "BATTRE", d2: "TOURNER" },
+            { tier: 3, diff: 8, w1: "FOUDRE", w2: "ARBRE", ans: "FOUDROYER", clue: "Frapper instantanement avec une charge fatale", type: "v", d1: "CALCINER", d2: "ABATTRE" },
+            { tier: 3, diff: 8, w1: "GRAINE", w2: "PATIENCE", ans: "MURIR", clue: "Atteindre son plein developpement avec le temps", type: "v", d1: "GRANDIR", d2: "ECLORE" },
+            { tier: 3, diff: 7, w1: "GUITARE", w2: "DOIGT", ans: "PINCER", clue: "Mettre en vibration une corde tendue", type: "v", d1: "FROTTER", d2: "GRATTER" },
+            { tier: 3, diff: 7, w1: "RACINE", w2: "SOL", ans: "ANCRER", clue: "Fixer tres solidement dans les profondeurs", type: "v", d1: "ENFOUIR", d2: "IMPLANTER" },
+            { tier: 3, diff: 8, w1: "VENT", w2: "DUNE", ans: "SCULPTER", clue: "Faconner avec patience le relief sableux", type: "v", d1: "MODELER", d2: "DEPLACER" },
+            { tier: 3, diff: 7, w1: "LABYRINTHE", w2: "FIL", ans: "GUIDER", clue: "Montrer le chemin de sortie sans se perdre", type: "v", d1: "DIRIGER", d2: "CONDUIRE" },
+            { tier: 3, diff: 7, w1: "HORLOGE", w2: "SABLE", ans: "SABLIER", clue: "Instrument antique qui mesure le temps qui file", type: "nom", d1: "CADRAN", d2: "CHRONOMETRE" },
+            { tier: 3, diff: 7, w1: "MIROIR", w2: "FUMEE", ans: "ILLUSION", clue: "Perception trompeuse qui masque la realite", type: "nom", d1: "REFLET", d2: "MIRAGE" },
+            { tier: 3, diff: 7, w1: "OCEAN", w2: "LUNE", ans: "MAREE", clue: "Oscillation periodique du niveau des mers", type: "nom", d1: "HOULE", d2: "COURANT" },
+            { tier: 3, diff: 7, w1: "SECRET", w2: "VOIX", ans: "CHUCHOTER", clue: "Parler a voix tres basse pour rester discret", type: "v", d1: "MURMURER", d2: "SOUFFLER" },
+            { tier: 3, diff: 7, w1: "SILENCE", w2: "MONTAGNE", ans: "ECHO", clue: "Repercussion d un son renvoye par la paroi", type: "nom", d1: "RESONANCE", d2: "BRUIT" },
+            { tier: 3, diff: 8, w1: "VAPEUR", w2: "MOTEUR", ans: "ENERGIE", clue: "Force motrice indispensable au deplacement", type: "nom", d1: "PRESSION", d2: "PUISSANCE" },
+            { tier: 3, diff: 7, w1: "POUMON", w2: "AIR", ans: "RESPIRER", clue: "Absorber et rejeter le souffle de la vie", type: "v", d1: "SOUFFLER", d2: "INSPIRER" },
+            { tier: 3, diff: 8, w1: "ETINCELLE", w2: "GAZ", ans: "EXPLOSER", clue: "Detonation brutale et inflammable", type: "v", d1: "DEFLAGRER", d2: "DEBORDER" },
+            { tier: 3, diff: 8, w1: "PAPILLON", w2: "COCON", ans: "ECLORE", clue: "Sortir de sa chrysalide pour se reveler au monde", type: "v", d1: "NAITRE", d2: "MUTER" },
+
+            // --- PALIER 4 : EXPERT & MAÎTRE (Niv 61-100+) ---
+            { tier: 4, diff: 9, w1: "SECRET", w2: "CADENAS", ans: "INVIOLABLE", clue: "Qualite de ce que nul ne peut forcer ni percer", type: "adj", d1: "HERMETIQUE", d2: "IMPENETRABLE" },
+            { tier: 4, diff: 9, w1: "OEUVRE", w2: "SIECLE", ans: "INTEMPOREL", clue: "Qui traverse les epoques sans jamais vieillir", type: "adj", d1: "IMMORTEL", d2: "PERPETUEL" },
+            { tier: 4, diff: 10, w1: "ABYSSE", w2: "FOSSE", ans: "INCOMMENSURABLE", clue: "D une profondeur qui depasse toute mesure", type: "adj", d1: "INFINI", d2: "INSONDABLE" },
+            { tier: 4, diff: 9, w1: "MYSTERE", w2: "VOILE", ans: "ENIGMATIQUE", clue: "Difficile a comprendre et charge de secrets", type: "adj", d1: "OBSCUR", d2: "MYSTIQUE" },
+            { tier: 4, diff: 9, w1: "OR", w2: "COURONNE", ans: "SOUVERAIN", clue: "Qui incarne l autorite supreme absolue", type: "adj", d1: "IMPERIAL", d2: "ROYAL" },
+            { tier: 4, diff: 9, w1: "PHOENIX", w2: "CENDRE", ans: "RENAITRE", clue: "Revenir triomphalement a la vie apres destruction", type: "v", d1: "RESURGIR", d2: "REVIVRE" },
+            { tier: 4, diff: 9, w1: "POETE", w2: "VERS", ans: "DECLAMER", clue: "Prononcer a voix haute avec emotion et lyrisme", type: "v", d1: "RECITER", d2: "PROCLAMER" },
+            { tier: 4, diff: 10, w1: "TEMPLE", w2: "DIVIN", ans: "SANCTUAIRE", clue: "Lieu sacre inviolable dedie a la priere", type: "nom", d1: "RELIQUAIRE", d2: "ORATOIRE" },
+            { tier: 4, diff: 10, w1: "DESTIN", w2: "ETOILE", ans: "INELUCTABLE", clue: "Ce a quoi aucun mortel ne peut echapper", type: "adj", d1: "FATAL", d2: "IMPLACABLE" },
+            { tier: 4, diff: 10, w1: "ALCHIMIE", w2: "PIERRE", ans: "TRANSMUTER", clue: "Changer la matiere vilaine en or pur", type: "v", d1: "METAMORPHOSER", d2: "SUBLIMER" }
           ];
 
-          const NOUNS = ["SOLEIL","LUNE","ETOILE","TERRE","OCEAN","FLEUVE","MONTAGNE","FORET","DESERT","VOLCAN","CIEL","NUAGE","PLUIE","NEIGE","ORAGE","ECLAIR","VENT","TEMPETE","FEU","FLAMME","BRAISE","CENDRE","FUMEE","LUMIERE","OMBRE","CHALEUR","EAU","GLACE","VAPEUR","SOURCE","CASCADE","LAC","RIVIERE","VAGUE","ARBRE","FLEUR","RACINE","BRANCHE","FEUILLE","GRAINE","LION","AIGLE","LOUP","SERPENT","TIGRE","FAUCON","REQUIN","DAUPHIN","BALEINE","LIVRE","PLUME","ENCRE","PAGE","HISTOIRE","POEME","CHATEAU","PALAIS","FORTERESSE","TOUR","PONT","ROUTE","TEMPLE","EPEE","BOUCLIER","FLECHE","ARC","ARMURE","CASQUE","COURONNE","COEUR","ESPRIT","PENSEE","MEMOIRE","REVE","ESPOIR","COURAGE","FORCE","SAGESSE","DESTIN","MUSIQUE","NOTE","MELODIE","RYTHME","CHANT","TEMPS","HEURE","MINUTE","SECONDE","SIECLE","OR","ARGENT","BRONZE","FER","ACIER","DIAMANT","RUBIS","VOYAGE","CHEMIN","BOUSSOLE","CARTE","NAVIRE","PORT","ILE"];
-          const VERBS = ["VOLER","COURIR","NAGER","MARCHER","GRIMPER","SAUTER","GLISSER","PLONGER","FLOTTER","BRILLER","ECLAIRER","RAYONNER","SCINTILLER","LUIRE","FLAMBOYER","ILLUMINER","BRULER","CONSUMER","ENFLAMMER","CHAUFFER","FONDRE","COULER","JAILLIR","ONDULER","RUISSELLER","INONDER","SUBMERGER","DEBORDER","ECRIRE","DESSINER","PEINDRE","SCULPTER","TRACER","GRAVER","COMPOSER","IMAGINER","CREER","FORGER","COMBATTRE","DEFENDRE","ATTAQUER","PROTEGER","VAINCRE","TRIOMPHER","CHANTER","JOUER","RESONNER","VIBRER","PENSER","MEDITER","REFLECHIR","CONTEMPLER","SONGER","REVER","GUIDER","DIRIGER","NAVIGUER","ORIENTER","PILOTER","MENER"];
-          const ADJS = ["RAPIDE","LENT","PUISSANT","AGILE","VIF","LEGER","LOURD","DUR","SOUPLE","BRILLANT","SOMBRE","LUMINEUX","OBSCUR","ECLATANT","RADIEUX","TERNE","CHAUD","FROID","BRULANT","GLACIAL","TIEDE","IMMENSE","MINUSCULE","GEANT","COLOSSAL","INFINI","VASTE","PROFOND","HAUT","ANCIEN","NOUVEAU","ANTIQUE","MODERNE","ETERNEL","EPHEMERE","PRECIEUX","RARE","DORE","ARGENTE","PUR","NOBLE","MYSTERIEUX","SECRET","CACHE","ENIGMATIQUE","SACRE","MAGIQUE","LEGENDAIRE","DIVIN"];
-
-          const CLUES = {
-            nouns: ["Element fondamental qui les relie", "Concept commun a ces deux elements", "Ce qui unit ces deux symboles", "Leur essence commune"],
-            verbs: ["Action dynamique qui les associe", "Ce que l on fait avec ces deux elements", "Mouvement ou processus les unissant"],
-            adjectives: ["Qualite frappante qui les caracterise", "Attribut commun a ces deux notions", "Ce qui decrit leur etat"]
-          };
+          const TIERS_CONF = [
+            { id: 1, name: "tier1_facile" },
+            { id: 2, name: "tier2_moyen" },
+            { id: 3, name: "tier3_difficile" },
+            { id: 4, name: "tier4_expert" }
+          ];
 
           fs.mkdirSync("vault_packs", { recursive: true });
 
-          let globalId = 1;
-          for (const tier of TIERS) {
-            console.log(`Generation de ${tier.name} (${tier.count} enigmes)...`);
-            const enigmas = [];
-            for (let i = 0; i < tier.count; i++) {
-              const cat = i % 3 === 0 ? "verbs" : (i % 3 === 1 ? "adjectives" : "nouns");
-              const pool = cat === "verbs" ? VERBS : (cat === "adjectives" ? ADJS : NOUNS);
-              const type = cat === "verbs" ? "v" : (cat === "adjectives" ? "adj" : "nom");
+          for (const tConf of TIERS_CONF) {
+            const items = LOGICAL_TEMPLATES.filter(item => item.tier === tConf.id);
+            const formatted = items.map((item, idx) => [
+              tConf.id * 1000 + idx + 1,
+              item.w1,
+              item.w2,
+              item.ans,
+              item.clue,
+              item.diff,
+              item.type,
+              item.d1,
+              item.d2
+            ]);
 
-              const r1 = Math.floor(Math.random() * pool.length);
-              let r2 = (r1 + 1 + Math.floor(Math.random() * (pool.length - 1))) % pool.length;
-              let rAns = (r2 + 1 + Math.floor(Math.random() * (pool.length - 2))) % pool.length;
-              let rD1 = (rAns + 1 + Math.floor(Math.random() * (pool.length - 3))) % pool.length;
-              let rD2 = (rD1 + 1 + Math.floor(Math.random() * (pool.length - 4))) % pool.length;
-
-              const clueArr = CLUES[cat];
-              const clue = clueArr[i % clueArr.length];
-              const diff = tier.minDiff + (i % (tier.maxDiff - tier.minDiff + 1));
-
-              enigmas.push([
-                globalId++,
-                pool[r1],
-                pool[r2],
-                pool[rAns],
-                clue,
-                diff,
-                type,
-                pool[rD1],
-                pool[rD2]
-              ]);
-            }
-
-            const rawJson = JSON.stringify(enigmas);
+            const rawJson = JSON.stringify(formatted);
             const gzipped = zlib.gzipSync(Buffer.from(rawJson));
-            fs.writeFileSync(path.join("vault_packs", `${tier.name}.json.gz`), gzipped);
-            console.log(`Termine : ${tier.name}.json.gz (${(gzipped.length / 1024 / 1024).toFixed(2)} Mo)`);
+            fs.writeFileSync(path.join("vault_packs", `${tConf.name}.json.gz`), gzipped);
+            console.log(`Succes : ${tConf.name}.json.gz (${formatted.length} enigmes certifiees)`);
           }
           '
 
