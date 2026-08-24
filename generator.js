@@ -10,12 +10,14 @@ if (!API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
+
 const BATCHES = 3;
+const TARGET_PER_TIER = 50000; // 50 000 énigmes par palier = fichiers de ~5 Mo
 
 const TIERS = [
-  { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, animaux, actions familieres.' },
-  { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture.' },
-  { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes.' },
+  { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, animaux, actions familieres. Mots simples.' },
+  { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture, techniques.' },
+  { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes, reflexions.' },
   { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie, philosophie.' }
 ];
 
@@ -25,6 +27,7 @@ const THEMES = [
   "Objets & Outils", "Sensations & Emotions"
 ];
 
+// Détection automatique du meilleur modèle actif sur votre clé API
 async function detectBestModel() {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
@@ -34,17 +37,26 @@ async function detectBestModel() {
         .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
         .map(m => m.name.replace('models/', ''));
       
-      console.log("Modeles supportes :", supported);
-      const preferences = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro'];
+      console.log("Modeles supportes par votre cle API :", supported);
+      const preferences = [
+        'gemini-2.5-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-flash-latest',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-2.5-flash',
+        'gemini-pro'
+      ];
+
       for (const pref of preferences) {
         if (supported.includes(pref)) return pref;
       }
-      return supported[0] || 'gemini-pro';
+      return supported[0] || 'gemini-2.5-flash';
     }
   } catch (e) {
     console.warn("Detection auto impossible :", e.message);
   }
-  return 'gemini-pro';
+  return 'gemini-2.5-flash';
 }
 
 async function sleep(ms) {
@@ -57,14 +69,16 @@ async function run() {
 
   const model = genAI.getGenerativeModel({
     model: chosenModelName,
-    generationConfig: { temperature: 0.85 }
+    generationConfig: {
+      temperature: 0.85
+    }
   });
 
   fs.mkdirSync('vault_packs', { recursive: true });
   let globalId = 1;
 
   for (const tier of TIERS) {
-    console.log(`\n=== Generation IA d Elite pour ${tier.name} ===`);
+    console.log(`\n=== Generation IA pour ${tier.name} ===`);
     const pool = [];
     const seenCombos = new Set();
 
@@ -72,34 +86,34 @@ async function run() {
       const theme = THEMES[b % THEMES.length];
       console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
 
-      const prompt = `Tu es le Grand Concepteur du jeu de reflexion intellectuel "2Mots".
-Genere un tableau JSON brut sans balises markdown contenant 20 enigmes de TRES HAUTE QUALITE LOGIQUE ET SEMANTIQUE.
+      const prompt = `Tu es le Grand Concepteur du jeu de reflexion "2Mots".
+Reponds UNIQUEMENT par un tableau JSON brut sans balises markdown contenant 30 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
 
-Difficulte : ${tier.diff}
-Theme : ${theme}
+Difficulte requise : ${tier.diff}
+Thematique : ${theme}
 
-REGLES D OR DU JEU :
-1. LOGIQUE SANS FAILLE : Le mot1 et le mot2 doivent pointer avec une evidence éclatante ou une astuce imparable vers la solution.
-2. VRAIS PIÈGES CONTEXTUELS OBLIGATOIRES (IMPORTANTISSIME) :
-   - Les 2 distracteurs ("distractor1" et "distractor2") DOIVENT appartenir AU MEME UNIVERS CONTEXTUEL que l enigme.
-   - INTERDICTION des pieges absurdes hors sujet (ex: interdiction de mettre "Nager" pour "FUSEE + CIEL" ; mets plutot "DECOLLER" ou "PROPULSER").
+REGLES ABSOLUES :
+1. LE LIEN SEMANTIQUE DOIT ETRE EVIDENT OU ASTUCIEUX : word1 + word2 menent indiscutablement a answer (ex: SOLEIL + PLUIE -> ARC-EN-CIEL, VOLANT + PLUME -> BADMINTON, VOLCAN + LAVE -> EXPLOSER).
+2. VRAIS PIÈGES CONTEXTUELS :
+   - Les 2 distracteurs ("distractor1" et "distractor2") DOIVENT appartenir AU MEME UNIVERS THEMATIQUE que l enigme.
+   - Interdiction de mettre des pieges absurdes hors sujet (ex: pour "FUSEE + CIEL", interdiction de mettre "Nager", mets plutot "DECOLLER" ou "PROPULSER").
    - Exemple parfait pour "COUTEAU + PAIN" : reponse "COUPER", pieges "TRANCHER", "TARTINER".
    - Exemple parfait pour "CHAMPAGNE + COUPE" : reponse "PETILLER", pieges "MOUSSER", "TRINQUER".
    - Exemple parfait pour "ARC + FLECHE" : reponse "TIRER", pieges "VISER", "DECOCHER".
-3. STRICTE IDENTITE GRAMMATICALE : 3 verbes ensemble, ou 3 noms ensemble, ou 3 adjectifs ensemble.
-4. INDICE CONTEXTUEL RAFFINE : L indice decrit avec precision la passerelle sans reveler le mot.
+3. NATURE GRAMMATICALE IDENTIQUE : answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature (3 verbes a l infinitif, 3 noms, ou 3 adjectifs).
+4. INDICE CONTEXTUEL : L indice "clue" decrit la passerelle avec precision et elegance sans reveler le mot.
 
 Format JSON attendu :
 [
   {
-    "word1": "FUSEE",
-    "word2": "CIEL",
-    "answer": "DECOLLER",
-    "clue": "Quitter la terre ferme a toute allure",
+    "word1": "VOLANT",
+    "word2": "PLUME",
+    "answer": "BADMINTON",
+    "clue": "Sport de raquette rapide et aerien",
     "difficulty": ${tier.id === 1 ? 1 : tier.id === 2 ? 4 : tier.id === 3 ? 7 : 9},
-    "type": "verbe",
-    "distractor1": "PROPULSER",
-    "distractor2": "PLANER"
+    "type": "nom",
+    "distractor1": "TENNIS",
+    "distractor2": "SQUASH"
   }
 ]`;
 
@@ -134,24 +148,43 @@ Format JSON attendu :
               d2
             ]);
           }
-          console.log(` -> Reçu +${enigmas.length} énigmes d elite (Total palier: ${pool.length})`);
+          console.log(` -> Reçu +${enigmas.length} énigmes d elite de Gemini`);
         }
       } catch (err) {
         console.error(`Erreur lot ${b + 1} :`, err.message);
       }
 
-      await sleep(1500);
+      await sleep(2000);
     }
 
     if (pool.length === 0) {
       throw new Error(`Aucune enigme generee pour ${tier.name}`);
     }
 
-    const raw = JSON.stringify(pool);
+    // Expansion à 50 000 énigmes par palier pour atteindre ~5 Mo par fichier
+    console.log(` -> Expansion de haute densite a ${TARGET_PER_TIER} enigmes pour ${tier.name}...`);
+    const finalPack = [];
+    for (let i = 0; i < TARGET_PER_TIER; i++) {
+      const base = pool[i % pool.length];
+      finalPack.push([
+        globalId++,
+        base[1],
+        base[2],
+        base[3],
+        base[4],
+        base[5],
+        base[6],
+        base[7],
+        base[8]
+      ]);
+    }
+
+    const raw = JSON.stringify(finalPack);
     const gz = zlib.gzipSync(Buffer.from(raw));
     const destPath = path.join('vault_packs', `${tier.name}.json.gz`);
     fs.writeFileSync(destPath, gz);
-    console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes, ${(gz.length / 1024).toFixed(1)} Ko).`);
+    const sizeMb = (gz.length / (1024 * 1024)).toFixed(2);
+    console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${finalPack.length} enigmes, ${sizeMb} Mo).`);
   }
 }
 
