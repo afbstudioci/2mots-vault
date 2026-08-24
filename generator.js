@@ -10,13 +10,6 @@ if (!API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
-  generationConfig: {
-    responseMimeType: "application/json",
-    temperature: 0.85
-  }
-});
 
 const BATCHES = 3;
 
@@ -33,10 +26,35 @@ const THEMES = [
   "Objets & Outils", "Sensations & Emotions"
 ];
 
-async function callGemini(prompt) {
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  return JSON.parse(text);
+// Détection automatique du meilleur modèle actif sur votre clé API
+async function detectBestModel() {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
+    const data = await res.json();
+    if (data.models && Array.isArray(data.models)) {
+      const supported = data.models
+        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+        .map(m => m.name.replace('models/', ''));
+      
+      console.log("Modeles supportes par votre cle API :", supported);
+      const preferences = [
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-8b',
+        'gemini-pro',
+        'gemini-2.0-flash'
+      ];
+
+      for (const pref of preferences) {
+        if (supported.includes(pref)) return pref;
+      }
+      return supported[0] || 'gemini-pro';
+    }
+  } catch (e) {
+    console.warn("Detection auto impossible :", e.message);
+  }
+  return 'gemini-pro';
 }
 
 async function sleep(ms) {
@@ -44,6 +62,16 @@ async function sleep(ms) {
 }
 
 async function run() {
+  const chosenModelName = await detectBestModel();
+  console.log(`\n>>> Modele selectionne : ${chosenModelName} <<<\n`);
+
+  const model = genAI.getGenerativeModel({
+    model: chosenModelName,
+    generationConfig: {
+      temperature: 0.85
+    }
+  });
+
   fs.mkdirSync('vault_packs', { recursive: true });
   let globalId = 1;
 
@@ -57,7 +85,7 @@ async function run() {
       console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
 
       const prompt = `Tu es le concepteur en chef du jeu "2Mots".
-Genere un tableau JSON contenant 25 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
+Reponds UNIQUEMENT par un tableau JSON brut sans balises markdown contenant 20 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
 
 Difficulte requise : ${tier.diff}
 Thematique : ${theme}
@@ -82,7 +110,11 @@ Format JSON attendu :
 ]`;
 
       try {
-        const enigmas = await callGemini(prompt);
+        const result = await model.generateContent(prompt);
+        let text = result.response.text();
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const enigmas = JSON.parse(text);
+
         if (Array.isArray(enigmas)) {
           for (const item of enigmas) {
             if (!item.word1 || !item.word2 || !item.answer) continue;
@@ -111,7 +143,7 @@ Format JSON attendu :
           console.log(` -> Reçu +${enigmas.length} énigmes de l'IA (Total palier: ${pool.length})`);
         }
       } catch (err) {
-        console.error(`Erreur sur le lot ${b + 1} :`, err.message);
+        console.error(`Erreur lot ${b + 1} :`, err.message);
       }
 
       await sleep(1500);
