@@ -1,9 +1,14 @@
-name: Generate Cartesian Semantic Vault
+name: Generate AI Semantic Vault with Gemini
 
 on:
   schedule:
     - cron: '0 0 1 * *'
   workflow_dispatch:
+    inputs:
+      batches_per_tier:
+        description: 'Nombre de lots par palier (5 lots = ~200 énigmes/tier)'
+        required: true
+        default: '5'
   push:
     branches:
       - main
@@ -12,7 +17,7 @@ permissions:
   contents: write
 
 jobs:
-  build-vault:
+  build-ai-vault:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,120 +29,159 @@ jobs:
         with:
           node-version: 20
 
-      - name: Generation du Vault
+      - name: Generation des Enigmes IA par Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BATCH_COUNT: ${{ github.event.inputs.batches_per_tier || '5' }}
         run: |
-          cat << 'EOF' > generator.js
+          cat << 'EOF' > generate_ai_vault.js
           const fs = require('fs');
+          const https = require('https');
           const zlib = require('zlib');
           const path = require('path');
-          const { pipeline } = require('stream/promises');
-          const { Readable } = require('stream');
 
-          const KNOWLEDGE_GRAPH = [
-            { tier: 1, diff: 1, type: "v", ans: "COUPER", w1s: ["COUTEAU","CISEAUX","SCIE","HACHE","LAME","BISTOURI","CANIF","CUTTER"], w2s: ["PAIN","TISSU","BOIS","PAPIER","ARBRE","VIANDE","CARTON","CORDAGE"], clues: ["Trancher net avec un outil affute", "Diviser nettement en morceaux"], dists: ["MANGER","CUIRE","PLIER","ECRASER","TAILLER"] },
-            { tier: 1, diff: 1, type: "v", ans: "OUVRIR", w1s: ["CLE","PASSE","SERRURE","VERROU","POIGNEE","BADGE"], w2s: ["PORTE","FENETRE","PORTAIL","COFFRE","GRILLE","VALISE"], clues: ["Debloquer un passage ferme", "Donner libre acces"], dists: ["FERMER","BLOQUER","TOURNER","BARRER","SCELLER"] },
-            { tier: 1, diff: 2, type: "v", ans: "ECRIRE", w1s: ["CRAYON","STYLO","PLUME","FEUTRE","CRAIE","CLAVIER"], w2s: ["PAPIER","CAHIER","LETTRE","TABLEAU","PAGE","PARCHEMIN"], clues: ["Tracer des mots et des lettres", "Poser sa pensee sur un support"], dists: ["DESSINER","LIRE","EFFACER","COLORIER","SIGNER"] },
-            { tier: 1, diff: 2, type: "v", ans: "VOLER", w1s: ["OISEAU","AIGLE","FAUCON","AVION","FUSEE","DRONE","PAPILLON"], w2s: ["CIEL","AIR","ALTITUDE","NUAGE","ESPACE","VENT"], clues: ["Se deplacer librement dans les airs", "S affranchir de la gravite"], dists: ["PLANER","FLOTTER","MARCHER","NAGER","ATTERRIR"] },
-            { tier: 1, diff: 1, type: "v", ans: "NAGER", w1s: ["POISSON","DAUPHIN","REQUIN","BALEINE","CANARD","PLONGEUR"], w2s: ["EAU","MER","OCEAN","RIVIERE","PISCINE","BASSIN"], clues: ["Se propulser dans l eau", "Se mouvoir en milieu aquatique"], dists: ["PLONGER","FLOTTER","COULER","RAMER","GLISSER"] },
-            { tier: 1, diff: 1, type: "v", ans: "LAVER", w1s: ["SAVON","SHAMPOING","LESSIVE","EPONGE","DOUCHETTE"], w2s: ["EAU","CORPS","PEAU","CHEVEUX","VAISSELLE","LINGE"], clues: ["Eliminer les saletes pour etre propre", "Nettoyer a l eau savonneuse"], dists: ["MOUILLER","FROTTER","RINCER","ESSUYER","SECHER"] },
-            { tier: 1, diff: 1, type: "v", ans: "CONDUIRE", w1s: ["VOITURE","CAMION","AUTOBUS","TAXIS","VEHICULE"], w2s: ["VOLANT","ROUTE","TRAJET","CIRCUIT","AUTOROUTE"], clues: ["Action de diriger un vehicule", "Se deplacer au volant sur la voie"], dists: ["ROULER","FREINER","ACCELERER","STATIONNER","PILOTER"] },
-            { tier: 1, diff: 1, type: "v", ans: "DANSER", w1s: ["MUSIQUE","MELODIE","RYTHME","TEMPO","CHORALE"], w2s: ["PIEDS","CORPS","CADENCE","PISTE","SCENE"], clues: ["Bouger son corps en cadence", "Suivre les pas de la melodie"], dists: ["SAUTER","MARCHER","TOURNER","VIBRER","CHANTER"] },
-            { tier: 1, diff: 1, type: "v", ans: "CHANTER", w1s: ["VOIX","CHORALE","MICRO","OPERA","SOLISTE"], w2s: ["NOTE","REFRAIN","CHANSON","AIR","COUPLET"], clues: ["Emettre des sons melodieux de la voix", "Interpreter un chant"], dists: ["PARLER","CRIER","SIFFLER","MURMURER","DECLAMER"] },
-            { tier: 1, diff: 1, type: "v", ans: "DORMIR", w1s: ["LIT","OREILLER","COUETTE","MATELAS"], w2s: ["SOMMEIL","NUIT","REPOS","FATIGUE"], clues: ["Se reposer dans les bras de Morphee", "Entrer en phase de sommeil"], dists: ["REVER","VEILLER","SOMNOLLER","REPOSER"] },
-            { tier: 1, diff: 1, type: "nom", ans: "ARC-EN-CIEL", w1s: ["SOLEIL","RAYON","LUMIERE","CHALEUR","CLARTE"], w2s: ["PLUIE","AVERS","GOUTTE","ORAGE","BRUME"], clues: ["Spectre colore dans le ciel", "Phenomene optique d apres la pluie"], dists: ["ORAGE","NUAGE","ECLAIR","FOUDRE","AURORE"] },
-            { tier: 1, diff: 1, type: "nom", ans: "PAIN", w1s: ["FARINE","BLE","GRAIN","CEREALE"], w2s: ["LEVURE","FOUR","BOULANGER","FOURNIL"], clues: ["Aliment de base dore cuit au four", "Nourriture croustillante universelle"], dists: ["GATEAU","BRIOCHE","PATE","GALETTE","TARTE"] },
-            { tier: 1, diff: 1, type: "nom", ans: "MIEL", w1s: ["ABEILLE","RUCHE","ESSAIM","BUTINEUSE"], w2s: ["FLEUR","NECTAR","POLLEN","CALICE"], clues: ["Substance sucree doree et naturelle", "Produit sucre des abeilles"], dists: ["SUCRE","SIROP","CONFITURE","CARAMEL","PATE"] },
-
-            { tier: 2, diff: 4, type: "v", ans: "PETILLER", w1s: ["CHAMPAGNE","SODA","CIDRE","BIERE","EAU GAZEUSE"], w2s: ["COUPE","FLUTE","VERRE","BOUTEILLE","CANETTE"], clues: ["Produire de petites bulles effervescentes", "Crepiter dans le verre"], dists: ["MOUSSER","TRINQUER","DEBORDER","SAVOURER","VERSER"] },
-            { tier: 2, diff: 5, type: "v", ans: "ORIENTER", w1s: ["BOUSSOLE","CADRAN","AIGUILLE","RADAR","SEXTANT"], w2s: ["NORD","DIRECTION","AZIMUT","HORIZON","CAP"], clues: ["Determiner la bonne trajectoire", "Indiquer la position spatiale"], dists: ["GUIDER","POINTER","DIRIGER","NAVIGUER","ALIGNER"] },
-            { tier: 2, diff: 4, type: "nom", ans: "ROUILLE", w1s: ["FER","ACIER","METAL","CLOU","BOULON"], w2s: ["HUMIDITE","PLUIE","EAU","AIR","OXYGENE"], clues: ["Oxydation rongeant le metal ferreux", "Depot brun destructeur"], dists: ["PEINTURE","MOUSSE","PATINE","VERNIS","CORROSION"] },
-            { tier: 2, diff: 5, type: "v", ans: "REFLECHIR", w1s: ["MIROIR","GLACE","CRISTAL","VITRE","SURFACE"], w2s: ["LUMIERE","RAYON","IMAGE","VISAGE","REFLET"], clues: ["Renvoyer l image fidele sans l absorber", "Reproduire fidelement la forme"], dists: ["DIFFUSER","EBLOUIR","PROJETER","RENVOYER","ILLUMINER"] },
-            { tier: 2, diff: 4, type: "v", ans: "HURLER", w1s: ["LOUP","MEUTE","COYOTE","CHACAL"], w2s: ["LUNE","NUIT","FORET","MONTAGNE","FROID"], clues: ["Pousser un cri puissant nocturne", "Clamer son appel dans la nuit"], dists: ["ABOYER","RUGIR","GEINDRE","FEULER","CRIER"] },
-            { tier: 2, diff: 5, type: "v", ans: "TIRER", w1s: ["ARC","ARBALETE","FUSIL","CANON","LANCE-PIERRE"], w2s: ["FLECHE","BALLE","CIBLE","PROJECTILE","CARQUOIS"], clues: ["Propulser un projectile vers sa cible", "Decocher le coup avec precision"], dists: ["VISER","LANCER","DECOCHER","TOUCHER","PROJECTER"] },
-            { tier: 2, diff: 4, type: "v", ans: "PEINDRE", w1s: ["PINCEAU","PALETTE","CHEVALET","GOUACHE"], w2s: ["TOILE","TABLEAU","FRESQUE","PORTRAIT"], clues: ["Appliquer la couleur sur une toile", "Creer une oeuvre picturale"], dists: ["DESSINER","VERNIR","VERNISSER","ENLUMINER","CROQUER"] },
-            { tier: 2, diff: 5, type: "v", ans: "FORGER", w1s: ["MARTEAU","ENCLUME","FORGERON","SOUFFLET"], w2s: ["FER","FEU","ACIER","BRAISE","CREUSET"], clues: ["Faconner le metal incandescent", "Travailler le fer chaud au marteau"], dists: ["FONDRE","MOULER","TREMPER","SOUDER","USINER"] },
-            { tier: 2, diff: 5, type: "v", ans: "NAVIGUER", w1s: ["NAVIRE","BATEAU","VOILIER","FREGATE","BARQUE"], w2s: ["MER","OCEAN","FLOT","PORT","LARGE"], clues: ["Se deplacer sur les flots marins", "Mener un bateau a bon port"], dists: ["RAMER","FLOTTER","DERIVER","MOUILLER","CABOTER"] },
-            { tier: 2, diff: 5, type: "nom", ans: "ORFEVRERIE", w1s: ["OR","ARGENT","PLATINE","DIAMANT"], w2s: ["BIJOU","COURONNE","DIADEME","PARURE"], clues: ["Art noble de faconner les parures precieuses", "Metier d art des joyaux"], dists: ["JOAILLERIE","FORGE","HORLOGERIE","SCULPTURE","GRAVURE"] },
-
-            { tier: 3, diff: 7, type: "v", ans: "ATTIRER", w1s: ["AIMANT","POLARITE","MAGNETISME","CHAMP","GRAVITE"], w2s: ["FER","METAL","ACIER","PARTICULE","MASSE"], clues: ["Exercer une attraction physique invisible", "Rapprocher inexorablement sans contact"], dists: ["CAPTURER","POLARISER","AIMANTER","COLLER","CONVERGER"] },
-            { tier: 3, diff: 8, type: "v", ans: "EXPLOSER", w1s: ["VOLCAN","CRATERE","MAGMA","DYNAMITE","REACTEUR"], w2s: ["LAVE","PRESSION","GAZ","CHALEUR","DEFLAGRATION"], clues: ["Liberer une force violente et destructrice", "Ceder sous une pression insoutenable"], dists: ["DEBORDER","CALCINER","FONDRE","PROPULSER","DEVASTER"] },
-            { tier: 3, diff: 7, type: "nom", ans: "MAREE", w1s: ["OCEAN","MER","LITTORAL","ESTUAIRE","BASSIN"], w2s: ["LUNE","GRAVITE","ATTRACTION","CYCLE","FLUX"], clues: ["Mouvement periodique des eaux marines", "Flux et reflux des flots cotieres"], dists: ["HOULE","COURANT","DERIVE","SUBMERSION","VAGUE"] },
-            { tier: 3, diff: 7, type: "v", ans: "ROMPRE", w1s: ["ECHO","ONDE","VOIX","CRI","RETENTISSEMENT"], w2s: ["SILENCE","CALME","VALLEE","NUIT","QUIETUDE"], clues: ["Mettre fin brusquement au calme ambiant", "Briser le silence d un coup"], dists: ["TROUBLER","RESONNER","DISSIPER","INTERROMPRE","DIVISER"] },
-            { tier: 3, diff: 7, type: "v", ans: "CHUCHOTER", w1s: ["SECRET","CONFIDENCE","MYSTERE","AVEU"], w2s: ["VOIX","OREILLE","SOUFFLE","OMBRE"], clues: ["Parler a voix tres basse pour rester discret", "Murmurer a l oreille"], dists: ["MURMURER","SOUFFLER","DIVULGUER","AVOUER","SECRETER"] },
-            { tier: 3, diff: 7, type: "v", ans: "SCINTILLER", w1s: ["ETOILE","DIAMANT","JOYAU","CRISTAL"], w2s: ["NUIT","ECLAT","LUMIERE","HORIZON"], clues: ["Briller d une vive lumiere changeante", "Emettre des reflets tremblotants"], dists: ["RAYONNER","LUIRE","EBLOUIR","FLAMBOYER","ILLUMINER"] },
-            { tier: 3, diff: 7, type: "nom", ans: "SABLIER", w1s: ["HORLOGE","TEMPS","SECONDE","CHRONO"], w2s: ["SABLE","GRAIN","VERRE","FIOLE"], clues: ["Instrument antique mesurant le temps qui file", "Double fiole de verre a ecoulement"], dists: ["CADRAN","CHRONOMETRE","MONTRE","CLEPSYDRE","PENDULE"] },
-
-            { tier: 4, diff: 9, type: "adj", ans: "INVIOLABLE", w1s: ["SECRET","CADENAS","BLINDAGE","FORTERESSE","COFFRE","SANCTUAIRE"], w2s: ["SERRURE","MYSTERE","SCEAU","SERMENT","SYSTEME"], clues: ["Que nulle force ne peut forcer ni alterer", "Garantissant une integrite absolue"], dists: ["HERMETIQUE","IMPENETRABLE","INCASSABLE","INALTIERABLE","INVINCIBLE"] },
-            { tier: 4, diff: 9, type: "adj", ans: "INTEMPOREL", w1s: ["OEUVRE","CHEF-D-OEUVRE","MONUMENT","ART","LEGENDE"], w2s: ["SIECLE","EPOQUE","TEMPS","HISTOIRE","MEMOIRE"], clues: ["Qui traverse les epoques sans vieillir", "Qui defie l usure des siecles"], dists: ["IMMORTEL","PERPETUEL","INDELEBILE","CELESTE","SUBLIME"] },
-            { tier: 4, diff: 10, type: "adj", ans: "INCOMMENSURABLE", w1s: ["ABYSSE","FOSSE","UNIVERS","COSMOS"], w2s: ["PROFONDEUR","INFINI","ETENDUE","DIMENSION"], clues: ["D une dimension qui depasse toute mesure", "Incommensurable et gigantesque"], dists: ["INFINI","INSONDABLE","GIGANTIQUE","DEMESURE","ABYSSAL"] },
-            { tier: 4, diff: 9, type: "adj", ans: "ENIGMATIQUE", w1s: ["MYSTERE","SPHINX","VOILE","ORACLE"], w2s: ["SECRET","REGARD","DESTIN","PROPHETIE"], clues: ["Difficile a sonder et charge de mysteres", "Qui intrigue profondement l esprit"], dists: ["OBSCUR","MYSTIQUE","SECRETIER","HERMETIQUE","VOILE"] },
-            { tier: 4, diff: 10, type: "v", ans: "TRANSMUTER", w1s: ["ALCHIMIE","PIERRE PHILOSOPHALE","ELIXIR","ATHANOR"], w2s: ["PLOMB","OR","MATIERE","SUBSTANCE","ESSENCE"], clues: ["Operer la transmutation de la matiere", "Elever un element vers sa perfection"], dists: ["METAMORPHOSER","SUBLIMER","CONVERTIR","PURIFIER","FORGER"] },
-            { tier: 4, diff: 10, type: "v", ans: "RENAITRE", w1s: ["PHOENIX","MYTHE","HEROS","LEGENDE"], w2s: ["CENDRE","FEU","MORT","DESTRUCTION"], clues: ["Revenir triomphalement a la vie apres destruction", "Ressusciter de ses propres ruines"], dists: ["RESURGIR","REVIVRE","SURVIVRE","S ELEVER","RASSURER"] }
-          ];
-
-          const TIERS_CONFIG = [
-            { id: 1, name: "tier1_facile" },
-            { id: 2, name: "tier2_moyen" },
-            { id: 3, name: "tier3_difficile" },
-            { id: 4, name: "tier4_expert" }
-          ];
-
-          function pickDistractors(dists, count = 2) {
-            const shuffled = [...dists].sort(() => Math.random() - 0.5);
-            return shuffled.slice(0, count);
+          const API_KEY = process.env.GEMINI_API_KEY;
+          if (!API_KEY) {
+            console.error("ERREUR : GEMINI_API_KEY est introuvable dans les Secrets GitHub !");
+            process.exit(1);
           }
 
-          async function* generateCartesianPuzzles(seeds, startGlobalId) {
-            const seenCombos = new Set();
-            let currentId = startGlobalId;
+          const BATCHES = parseInt(process.env.BATCH_COUNT || '5', 10);
 
-            for (const rel of seeds) {
-              for (const w1 of rel.w1s) {
-                for (const w2 of rel.w2s) {
-                  const comboKey = `${w1}#${w2}#${rel.ans}`;
-                  if (seenCombos.has(comboKey)) continue;
-                  seenCombos.add(comboKey);
+          const TIERS = [
+            { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets du quotidien, nature evidente, actions familieres, animaux, meteo. Mots simples.' },
+            { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture, techniques.' },
+            { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, psychologie, histoire, mecanismes complexes, emotions.' },
+            { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie, metaphores subtiles, philosophie.' }
+          ];
 
-                  const clue = rel.clues[Math.floor(Math.random() * rel.clues.length)];
-                  const [d1, d2] = pickDistractors(rel.dists, 2);
+          const THEMES = [
+            "Sciences & Espace", "Nature & Animaux", "Histoire & Civilisations",
+            "Cuisine & Terroir", "Arts & Musique", "Sports & Aventure",
+            "Objets & Outils", "Sensations & Emotions", "Litterature & Mythes"
+          ];
 
-                  const record = [
-                    currentId++,
-                    w1,
-                    w2,
-                    rel.ans,
-                    clue,
-                    rel.diff,
-                    rel.type,
-                    d1,
-                    d2
-                  ];
-
-                  yield JSON.stringify(record) + "\n";
+          function callGemini(prompt) {
+            return new Promise((resolve, reject) => {
+              const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+              const payload = JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: 0.85,
+                  responseMimeType: "application/json"
                 }
-              }
-            }
+              });
+
+              const req = https.request(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payload)
+                }
+              }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(data);
+                    const text = parsed.candidates[0].content.parts[0].text;
+                    resolve(JSON.parse(text));
+                  } catch (e) {
+                    reject(new Error("Reponse Gemini invalide : " + data));
+                  }
+                });
+              });
+
+              req.on('error', reject);
+              req.write(payload);
+              req.end();
+            });
+          }
+
+          async function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
           }
 
           async function run() {
-            const outputDir = path.resolve("vault_packs");
-            if (!fs.existsSync(outputDir)) {
-              fs.mkdirSync(outputDir, { recursive: true });
-            }
-
+            fs.mkdirSync('vault_packs', { recursive: true });
             let globalId = 1;
 
-            for (const config of TIERS_CONFIG) {
-              const seeds = KNOWLEDGE_GRAPH.filter(r => r.tier === config.id);
-              const destinationPath = path.join(outputDir, `${config.name}.ndjson.gz`);
+            for (const tier of TIERS) {
+              console.log(`\n=== Generation IA pour ${tier.name} ===`);
+              const pool = [];
+              const seenCombos = new Set();
 
-              console.log(`Generation pour ${config.name}...`);
-              const readable = Readable.from(generateCartesianPuzzles(seeds, globalId));
-              const gzip = zlib.createGzip({ level: 9 });
-              const writeStream = fs.createWriteStream(destinationPath);
+              for (let b = 0; b < BATCHES; b++) {
+                const theme = THEMES[b % THEMES.length];
+                console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (Theme: ${theme})...`);
 
-              await pipeline(readable, gzip, writeStream);
-              console.log(`Ok: ${config.name}.ndjson.gz cree.`);
+                const prompt = `Tu es le concepteur en chef du jeu de reflexion "2Mots".
+Tu dois generer un tableau JSON contenant 30 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES, INGENIEUSES et SANS AUCUNE INCOHERENCE.
+
+Difficulte requise : ${tier.diff}
+Thematique prioritaire : ${theme}
+
+REGLES ABSOLUES :
+1. LIEN SEMANTIQUE PARFAIT : word1 + word2 doivent mener incontestablement a "answer" (Ex: SOLEIL + PLUIE -> ARC-EN-CIEL, VOLANT + PLUME -> BADMINTON, VOLCAN + LAVE -> EXPLOSER).
+2. NATURE GRAMMATICALE IDENTIQUE : answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature (3 verbes a l infinitif, 3 noms, ou 3 adjectifs).
+3. INDICE CONTEXTUEL : L indice ("clue") doit decrire la passerelle sans reveler la reponse brute.
+4. DISTRACTEURS DU MEME UNIVERS : Les leurres doivent etre plausibles dans le meme domaine.
+
+Format JSON attendu :
+[
+  {
+    "word1": "VOLANT",
+    "word2": "PLUME",
+    "answer": "BADMINTON",
+    "clue": "Sport de raquette rapide et aerien",
+    "difficulty": ${tier.id === 1 ? 1 : tier.id === 2 ? 4 : tier.id === 3 ? 7 : 9},
+    "type": "nom",
+    "distractor1": "TENNIS",
+    "distractor2": "SQUASH"
+  }
+]`;
+
+                try {
+                  const enigmas = await callGemini(prompt);
+                  if (Array.isArray(enigmas)) {
+                    for (const item of enigmas) {
+                      if (!item.word1 || !item.word2 || !item.answer) continue;
+                      const w1 = String(item.word1).toUpperCase().trim();
+                      const w2 = String(item.word2).toUpperCase().trim();
+                      const ans = String(item.answer).toUpperCase().trim();
+                      const key = `${w1}#${w2}#${ans}`;
+                      if (seenCombos.has(key)) continue;
+                      seenCombos.add(key);
+
+                      const d1 = String(item.distractor1 || 'CHOIX A').toUpperCase().trim();
+                      const d2 = String(item.distractor2 || 'CHOIX B').toUpperCase().trim();
+
+                      pool.push([
+                        globalId++,
+                        w1,
+                        w2,
+                        ans,
+                        item.clue || "Point commun semantique",
+                        item.difficulty || (tier.id * 2),
+                        item.type || "nom",
+                        d1,
+                        d2
+                      ]);
+                    }
+                    console.log(` -> Total accumule: ${pool.length} enigmes.`);
+                  }
+                } catch (err) {
+                  console.warn(`Avertissement sur le lot ${b + 1}:`, err.message);
+                }
+
+                await sleep(2000);
+              }
+
+              const raw = JSON.stringify(pool);
+              const gz = zlib.gzipSync(Buffer.from(raw));
+              const destPath = path.join('vault_packs', `${tier.name}.json.gz`);
+              fs.writeFileSync(destPath, gz);
+              console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes, ${(gz.length / 1024).toFixed(1)} Ko).`);
             }
           }
 
@@ -147,15 +191,15 @@ jobs:
           });
           EOF
 
-          node generator.js
+          node generate_ai_vault.js
 
       - name: Publication automatique dans la Release GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vault-release
-          name: Semantic Vault Release
+          tag_name: vault-v${{ github.run_number }}
+          name: Semantic Vault v${{ github.run_number }} (AI Generated)
           draft: false
           prerelease: false
-          files: vault_packs/*.ndjson.gz
+          files: vault_packs/*.json.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
