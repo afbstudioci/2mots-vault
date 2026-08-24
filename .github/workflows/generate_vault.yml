@@ -23,6 +23,9 @@ jobs:
         with:
           node-version: 20
 
+      - name: Installation du SDK Officiel Google Gemini
+        run: npm install @google/generative-ai
+
       - name: Execution du Generateur IA
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
