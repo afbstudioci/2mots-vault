@@ -1,3 +1,4 @@
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const zlib = require('zlib');
 const path = require('path');
@@ -7,6 +8,15 @@ if (!API_KEY) {
   console.error("ERREUR : GEMINI_API_KEY est absente des Secrets GitHub !");
   process.exit(1);
 }
+
+const genAI = new GoogleGenerativeAI(API_KEY);
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+  generationConfig: {
+    responseMimeType: "application/json",
+    temperature: 0.85
+  }
+});
 
 const BATCHES = 3;
 
@@ -24,28 +34,9 @@ const THEMES = [
 ];
 
 async function callGemini(prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.85,
-        responseMimeType: "application/json"
-      }
-    })
-  });
-
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`Gemini API Error: ${data.error.message}`);
-  }
-
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!rawText) throw new Error("Reponse vide de Gemini");
-  return JSON.parse(rawText);
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  return JSON.parse(text);
 }
 
 async function sleep(ms) {
