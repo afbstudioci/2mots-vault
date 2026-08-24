@@ -1,109 +1,161 @@
-const fs = require('fs');
-const path = require('path');
-const zlib = require('zlib');
-const { pipeline } = require('stream/promises');
-const { Readable } = require('stream');
+name: Generate Cartesian Semantic Vault
 
-// BANQUE RELATIONNELLE DIVERSIFIÉE (EXTENSIBLE)
-const KNOWLEDGE_GRAPH = [
-  // TIER 1 - FACILE (Actions concrètes, objets du quotidien)
-  { tier: 1, diff: 1, type: "v", ans: "COUPER", w1s: ["COUTEAU", "CISEAUX", "SCIE", "HACHE", "LAME", "BISTOURI", "CANIF", "SERPETTE", "CUTTER"], w2s: ["PAIN", "TISSU", "BOIS", "PAPIER", "ARBRE", "VIANDE", "CORDAGE", "RUBAN", "CARTON"], clues: ["Trancher net avec un instrument affute", "Diviser en fractions distinctes"], dists: ["MANGER", "CUIRE", "PLIER", "ECRASER", "TAILLER", "RALLONGER"] },
-  { tier: 1, diff: 1, type: "v", ans: "OUVRIR", w1s: ["CLE", "PASSE", "SERRURE", "VERROU", "POIGNEE", "CODE", "CARTE", "BADGE"], w2s: ["PORTE", "FENETRE", "PORTAIL", "COFFRE", "GRILLE", "VALISE", "ARMOIRE", "TRAPPE"], clues: ["Debloquer un passage ferme", "Donner libre acces"], dists: ["FERMER", "BLOQUER", "TOURNER", "BARRER", "SCELLER", "ENCLENCHER"] },
-  { tier: 1, diff: 2, type: "v", ans: "ECRIRE", w1s: ["CRAYON", "STYLO", "PLUME", "FEUTRE", "CRAIE", "PINCEAU", "CLAVIER"], w2s: ["PAPIER", "CAHIER", "LETTRE", "TABLEAU", "PAGE", "PARCHEMIN", "ECRAN"], clues: ["Tracer des symboles et des mots", "Poser sa pensee sur un support"], dists: ["DESSINER", "LIRE", "EFFACER", "COLORIER", "SIGNER", "IMPRIMER"] },
-  { tier: 1, diff: 2, type: "v", ans: "VOLER", w1s: ["OISEAU", "AIGLE", "FAUCON", "AVION", "FUSEE", "DRONE", "PAPILLON", "MONTGOLFIERE"], w2s: ["CIEL", "AIR", "ALTITUDE", "NUAGE", "ESPACE", "VENT", "ATMOSPHERE"], clues: ["Se deplacer librement dans les airs", "S affranchir de la gravite"], dists: ["PLANER", "FLOTTER", "MARCHER", "NAGER", "GRIMPER", "ATTERRIR"] },
-  { tier: 1, diff: 1, type: "nom", ans: "ARC-EN-CIEL", w1s: ["SOLEIL", "RAYON", "LUMIERE", "CHALEUR", "CLARTE"], w2s: ["PLUIE", "AVERSE", "GOUTTE", "ORAGE", "BRUME"], clues: ["Spectre multicolore celeste", "Phenomene optique d apres la pluie"], dists: ["ECLAIR", "NUAGE", "FOUDRE", "AURORE", "HORIZON"] },
+on:
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
-  // TIER 2 - INTERMÉDIAIRE (Sciences, techniques, nature)
-  { tier: 2, diff: 4, type: "v", ans: "PETILLER", w1s: ["CHAMPAGNE", "SODA", "CIDRE", "BIERE", "EAU GAZEUSE"], w2s: ["COUPE", "FLUTE", "VERRE", "BOUTEILLE", "CANETTE"], clues: ["Produire de petites bulles effervescentes", "Crepiter au contact de l air"], dists: ["MOUSSER", "TRINQUER", "DEBORDER", "SAVOURER", "VERSER", "MACERER"] },
-  { tier: 2, diff: 5, type: "v", ans: "ORIENTER", w1s: ["BOUSSOLE", "CADRAN", "AIGUILLE", "RADAR", "ASTROLABE", "SEXTANT"], w2s: ["NORD", "DIRECTION", "AZIMUT", "HORIZON", "CAP", "MERIDIEN"], clues: ["Determiner la bonne trajectoire", "Indiquer la position spaciale"], dists: ["GUIDER", "POINTER", "DIRIGER", "NAVIGUER", "ALIGNER", "CALCULER"] },
-  { tier: 2, diff: 4, type: "nom", ans: "ROUILLE", w1s: ["FER", "ACIER", "METAL", "CLOU", "BOULON", "CARCASSE"], w2s: ["HUMIDITE", "PLUIE", "EAU", "AIR", "OXYGENE"], clues: ["Oxydation rongeant le metal ferreux", "Depot brun destructeur"], dists: ["PEINTURE", "MOUSSE", "PATINE", "VERNIS", "CENDRE", "CORROSION"] },
-  { tier: 2, diff: 5, type: "v", ans: "REFLECHIR", w1s: ["MIROIR", "GLACE", "CRISTAL", "VITRE", "SURFACE"], w2s: ["LUMIERE", "RAYON", "IMAGE", "VISAGE", "REFLET"], clues: ["Renvoyer les faisceaux incidents sans absorber", "Reproduire fidèlement la forme"], dists: ["DIFFUSER", "EBLOUIR", "PROJETER", "RENVOYER", "ILLUMINER", "ABSORBER"] },
+permissions:
+  contents: write
 
-  // TIER 3 - AVANCÉ (Concepts abstraits, processus dynamiques)
-  { tier: 3, diff: 7, type: "v", ans: "ATTIRER", w1s: ["AIMANT", "POLARITE", "MAGNETISME", "CHAMP", "GRAVITE"], w2s: ["FER", "METAL", "ACIER", "PARTICULE", "MASSE"], clues: ["Exercer une attraction physique invisible", "Rapprocher inexorablement"], dists: ["CAPTURER", "POLARISER", "AIMANTER", "COLLER", "CONVERGER", "REPULSER"] },
-  { tier: 3, diff: 8, type: "v", ans: "EXPLOSER", w1s: ["VOLCAN", "CRATERE", "MAGMA", "DYNAMITE", "REACTEUR"], w2s: ["LAVE", "PRESSION", "GAZ", "CHALEUR", "DEFLAGRATION"], clues: ["Liberer une force violente et destructrice", "Ceder sous une pression insoutenable"], dists: ["DEBORDER", "CALCINER", "FONDRE", "PROPULSER", "DEVASTER", "ENGLOUTIR"] },
-  { tier: 3, diff: 7, type: "nom", ans: "MAREE", w1s: ["OCEAN", "MER", "LITTORAL", "ESTUAIRE", "BASSIN"], w2s: ["LUNE", "GRAVITE", "ATTRACTION", "CYCLE", "FLUX"], clues: ["Mouvement periodique des eaux marines", "Oscillation oscillatoire du rivage"], dists: ["HOULE", "COURANT", "DERIVE", "SUBMERSION", "VAGUE", "TOURBILLON"] },
+jobs:
+  build-vault:
+    runs-on: ubuntu-latest
 
-  // TIER 4 - EXPERT (Symbolique, littéraire, alchimique)
-  { tier: 4, diff: 9, type: "adj", ans: "INVIOLABLE", w1s: ["SECRET", "CADENAS", "BLINDAGE", "FORTERESSE", "COFFRE", "SANCTUAIRE"], w2s: ["SERRURE", "MYSTERE", "SCEAU", "SERMENT", "SYSTEME"], clues: ["Que nulle force ne peut forcer ni alterer", "Garantissant une integrite absolue"], dists: ["HERMETIQUE", "IMPENETRABLE", "INCASSABLE", "INALTIERABLE", "INVINCIBLE", "SACRE"] },
-  { tier: 4, diff: 10, type: "v", ans: "TRANSMUTER", w1s: ["ALCHIMIE", "PIERRE PHILOSOPHALE", "ELIXIR", "ATHANOR", "MAGISTERE"], w2s: ["PLOMB", "OR", "MATIERE", "SUBSTANCE", "ESSENCE"], clues: ["Operer la transmutation de la matiere", "Elever un element vers sa perfection"], dists: ["METAMORPHOSER", "SUBLIMER", "CONVERTIR", "PURIFIER", "FORGER", "DISSOUDRE"] }
-];
+    steps:
+      - name: Checkout du depot
+        uses: actions/checkout@v4
 
-const TIERS_CONFIG = [
-  { id: 1, name: "tier1_facile" },
-  { id: 2, name: "tier2_moyen" },
-  { id: 3, name: "tier3_difficile" },
-  { id: 4, name: "tier4_expert" }
-];
+      - name: Configuration de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-// GENERATEUR DE DISTRACTEURS SÉMANTIQUES DYNAMIQUES
-function pickDistractors(dists, count = 2) {
-  const shuffled = [...dists].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
+      - name: Generation du Vault
+        run: |
+          cat << 'EOF' > generator.js
+          const fs = require('fs');
+          const zlib = require('zlib');
+          const path = require('path');
+          const { pipeline } = require('stream/promises');
+          const { Readable } = require('stream');
 
-// GENERATEUR STREAM POUR LE PIPELINE ZLIB
-async function* generateUniquePuzzles(seeds, startGlobalId) {
-  const seenCombos = new Set();
-  let currentId = startGlobalId;
+          const KNOWLEDGE_GRAPH = [
+            { tier: 1, diff: 1, type: "v", ans: "COUPER", w1s: ["COUTEAU","CISEAUX","SCIE","HACHE","LAME","BISTOURI","CANIF","CUTTER"], w2s: ["PAIN","TISSU","BOIS","PAPIER","ARBRE","VIANDE","CARTON","CORDAGE"], clues: ["Trancher net avec un outil affute", "Diviser nettement en morceaux"], dists: ["MANGER","CUIRE","PLIER","ECRASER","TAILLER"] },
+            { tier: 1, diff: 1, type: "v", ans: "OUVRIR", w1s: ["CLE","PASSE","SERRURE","VERROU","POIGNEE","BADGE"], w2s: ["PORTE","FENETRE","PORTAIL","COFFRE","GRILLE","VALISE"], clues: ["Debloquer un passage ferme", "Donner libre acces"], dists: ["FERMER","BLOQUER","TOURNER","BARRER","SCELLER"] },
+            { tier: 1, diff: 2, type: "v", ans: "ECRIRE", w1s: ["CRAYON","STYLO","PLUME","FEUTRE","CRAIE","CLAVIER"], w2s: ["PAPIER","CAHIER","LETTRE","TABLEAU","PAGE","PARCHEMIN"], clues: ["Tracer des mots et des lettres", "Poser sa pensee sur un support"], dists: ["DESSINER","LIRE","EFFACER","COLORIER","SIGNER"] },
+            { tier: 1, diff: 2, type: "v", ans: "VOLER", w1s: ["OISEAU","AIGLE","FAUCON","AVION","FUSEE","DRONE","PAPILLON"], w2s: ["CIEL","AIR","ALTITUDE","NUAGE","ESPACE","VENT"], clues: ["Se deplacer librement dans les airs", "S affranchir de la gravite"], dists: ["PLANER","FLOTTER","MARCHER","NAGER","ATTERRIR"] },
+            { tier: 1, diff: 1, type: "v", ans: "NAGER", w1s: ["POISSON","DAUPHIN","REQUIN","BALEINE","CANARD","PLONGEUR"], w2s: ["EAU","MER","OCEAN","RIVIERE","PISCINE","BASSIN"], clues: ["Se propulser dans l eau", "Se mouvoir en milieu aquatique"], dists: ["PLONGER","FLOTTER","COULER","RAMER","GLISSER"] },
+            { tier: 1, diff: 1, type: "v", ans: "LAVER", w1s: ["SAVON","SHAMPOING","LESSIVE","EPONGE","DOUCHETTE"], w2s: ["EAU","CORPS","PEAU","CHEVEUX","VAISSELLE","LINGE"], clues: ["Eliminer les saletes pour etre propre", "Nettoyer a l eau savonneuse"], dists: ["MOUILLER","FROTTER","RINCER","ESSUYER","SECHER"] },
+            { tier: 1, diff: 1, type: "v", ans: "CONDUIRE", w1s: ["VOITURE","CAMION","AUTOBUS","TAXIS","VEHICULE"], w2s: ["VOLANT","ROUTE","TRAJET","CIRCUIT","AUTOROUTE"], clues: ["Action de diriger un vehicule", "Se deplacer au volant sur la voie"], dists: ["ROULER","FREINER","ACCELERER","STATIONNER","PILOTER"] },
+            { tier: 1, diff: 1, type: "v", ans: "DANSER", w1s: ["MUSIQUE","MELODIE","RYTHME","TEMPO","CHORALE"], w2s: ["PIEDS","CORPS","CADENCE","PISTE","SCENE"], clues: ["Bouger son corps en cadence", "Suivre les pas de la melodie"], dists: ["SAUTER","MARCHER","TOURNER","VIBRER","CHANTER"] },
+            { tier: 1, diff: 1, type: "v", ans: "CHANTER", w1s: ["VOIX","CHORALE","MICRO","OPERA","SOLISTE"], w2s: ["NOTE","REFRAIN","CHANSON","AIR","COUPLET"], clues: ["Emettre des sons melodieux de la voix", "Interpreter un chant"], dists: ["PARLER","CRIER","SIFFLER","MURMURER","DECLAMER"] },
+            { tier: 1, diff: 1, type: "v", ans: "DORMIR", w1s: ["LIT","OREILLER","COUETTE","MATELAS"], w2s: ["SOMMEIL","NUIT","REPOS","FATIGUE"], clues: ["Se reposer dans les bras de Morphee", "Entrer en phase de sommeil"], dists: ["REVER","VEILLER","SOMNOLLER","REPOSER"] },
+            { tier: 1, diff: 1, type: "nom", ans: "ARC-EN-CIEL", w1s: ["SOLEIL","RAYON","LUMIERE","CHALEUR","CLARTE"], w2s: ["PLUIE","AVERS","GOUTTE","ORAGE","BRUME"], clues: ["Spectre colore dans le ciel", "Phenomene optique d apres la pluie"], dists: ["ORAGE","NUAGE","ECLAIR","FOUDRE","AURORE"] },
+            { tier: 1, diff: 1, type: "nom", ans: "PAIN", w1s: ["FARINE","BLE","GRAIN","CEREALE"], w2s: ["LEVURE","FOUR","BOULANGER","FOURNIL"], clues: ["Aliment de base dore cuit au four", "Nourriture croustillante universelle"], dists: ["GATEAU","BRIOCHE","PATE","GALETTE","TARTE"] },
+            { tier: 1, diff: 1, type: "nom", ans: "MIEL", w1s: ["ABEILLE","RUCHE","ESSAIM","BUTINEUSE"], w2s: ["FLEUR","NECTAR","POLLEN","CALICE"], clues: ["Substance sucree doree et naturelle", "Produit sucre des abeilles"], dists: ["SUCRE","SIROP","CONFITURE","CARAMEL","PATE"] },
 
-  for (const rel of seeds) {
-    for (const w1 of rel.w1s) {
-      for (const w2 of rel.w2s) {
-        // Clé unique pour interdire formellement les doublons
-        const comboKey = `${w1}#${w2}#${rel.ans}`;
-        if (seenCombos.has(comboKey)) continue;
-        seenCombos.add(comboKey);
+            { tier: 2, diff: 4, type: "v", ans: "PETILLER", w1s: ["CHAMPAGNE","SODA","CIDRE","BIERE","EAU GAZEUSE"], w2s: ["COUPE","FLUTE","VERRE","BOUTEILLE","CANETTE"], clues: ["Produire de petites bulles effervescentes", "Crepiter dans le verre"], dists: ["MOUSSER","TRINQUER","DEBORDER","SAVOURER","VERSER"] },
+            { tier: 2, diff: 5, type: "v", ans: "ORIENTER", w1s: ["BOUSSOLE","CADRAN","AIGUILLE","RADAR","SEXTANT"], w2s: ["NORD","DIRECTION","AZIMUT","HORIZON","CAP"], clues: ["Determiner la bonne trajectoire", "Indiquer la position spatiale"], dists: ["GUIDER","POINTER","DIRIGER","NAVIGUER","ALIGNER"] },
+            { tier: 2, diff: 4, type: "nom", ans: "ROUILLE", w1s: ["FER","ACIER","METAL","CLOU","BOULON"], w2s: ["HUMIDITE","PLUIE","EAU","AIR","OXYGENE"], clues: ["Oxydation rongeant le metal ferreux", "Depot brun destructeur"], dists: ["PEINTURE","MOUSSE","PATINE","VERNIS","CORROSION"] },
+            { tier: 2, diff: 5, type: "v", ans: "REFLECHIR", w1s: ["MIROIR","GLACE","CRISTAL","VITRE","SURFACE"], w2s: ["LUMIERE","RAYON","IMAGE","VISAGE","REFLET"], clues: ["Renvoyer l image fidele sans l absorber", "Reproduire fidelement la forme"], dists: ["DIFFUSER","EBLOUIR","PROJETER","RENVOYER","ILLUMINER"] },
+            { tier: 2, diff: 4, type: "v", ans: "HURLER", w1s: ["LOUP","MEUTE","COYOTE","CHACAL"], w2s: ["LUNE","NUIT","FORET","MONTAGNE","FROID"], clues: ["Pousser un cri puissant nocturne", "Clamer son appel dans la nuit"], dists: ["ABOYER","RUGIR","GEINDRE","FEULER","CRIER"] },
+            { tier: 2, diff: 5, type: "v", ans: "TIRER", w1s: ["ARC","ARBALETE","FUSIL","CANON","LANCE-PIERRE"], w2s: ["FLECHE","BALLE","CIBLE","PROJECTILE","CARQUOIS"], clues: ["Propulser un projectile vers sa cible", "Decocher le coup avec precision"], dists: ["VISER","LANCER","DECOCHER","TOUCHER","PROJECTER"] },
+            { tier: 2, diff: 4, type: "v", ans: "PEINDRE", w1s: ["PINCEAU","PALETTE","CHEVALET","GOUACHE"], w2s: ["TOILE","TABLEAU","FRESQUE","PORTRAIT"], clues: ["Appliquer la couleur sur une toile", "Creer une oeuvre picturale"], dists: ["DESSINER","VERNIR","VERNISSER","ENLUMINER","CROQUER"] },
+            { tier: 2, diff: 5, type: "v", ans: "FORGER", w1s: ["MARTEAU","ENCLUME","FORGERON","SOUFFLET"], w2s: ["FER","FEU","ACIER","BRAISE","CREUSET"], clues: ["Faconner le metal incandescent", "Travailler le fer chaud au marteau"], dists: ["FONDRE","MOULER","TREMPER","SOUDER","USINER"] },
+            { tier: 2, diff: 5, type: "v", ans: "NAVIGUER", w1s: ["NAVIRE","BATEAU","VOILIER","FREGATE","BARQUE"], w2s: ["MER","OCEAN","FLOT","PORT","LARGE"], clues: ["Se deplacer sur les flots marins", "Mener un bateau a bon port"], dists: ["RAMER","FLOTTER","DERIVER","MOUILLER","CABOTER"] },
+            { tier: 2, diff: 5, type: "nom", ans: "ORFEVRERIE", w1s: ["OR","ARGENT","PLATINE","DIAMANT"], w2s: ["BIJOU","COURONNE","DIADEME","PARURE"], clues: ["Art noble de faconner les parures precieuses", "Metier d art des joyaux"], dists: ["JOAILLERIE","FORGE","HORLOGERIE","SCULPTURE","GRAVURE"] },
 
-        const clue = rel.clues[Math.floor(Math.random() * rel.clues.length)];
-        const [d1, d2] = pickDistractors(rel.dists, 2);
+            { tier: 3, diff: 7, type: "v", ans: "ATTIRER", w1s: ["AIMANT","POLARITE","MAGNETISME","CHAMP","GRAVITE"], w2s: ["FER","METAL","ACIER","PARTICULE","MASSE"], clues: ["Exercer une attraction physique invisible", "Rapprocher inexorablement sans contact"], dists: ["CAPTURER","POLARISER","AIMANTER","COLLER","CONVERGER"] },
+            { tier: 3, diff: 8, type: "v", ans: "EXPLOSER", w1s: ["VOLCAN","CRATERE","MAGMA","DYNAMITE","REACTEUR"], w2s: ["LAVE","PRESSION","GAZ","CHALEUR","DEFLAGRATION"], clues: ["Liberer une force violente et destructrice", "Ceder sous une pression insoutenable"], dists: ["DEBORDER","CALCINER","FONDRE","PROPULSER","DEVASTER"] },
+            { tier: 3, diff: 7, type: "nom", ans: "MAREE", w1s: ["OCEAN","MER","LITTORAL","ESTUAIRE","BASSIN"], w2s: ["LUNE","GRAVITE","ATTRACTION","CYCLE","FLUX"], clues: ["Mouvement periodique des eaux marines", "Flux et reflux des flots cotieres"], dists: ["HOULE","COURANT","DERIVE","SUBMERSION","VAGUE"] },
+            { tier: 3, diff: 7, type: "v", ans: "ROMPRE", w1s: ["ECHO","ONDE","VOIX","CRI","RETENTISSEMENT"], w2s: ["SILENCE","CALME","VALLEE","NUIT","QUIETUDE"], clues: ["Mettre fin brusquement au calme ambiant", "Briser le silence d un coup"], dists: ["TROUBLER","RESONNER","DISSIPER","INTERROMPRE","DIVISER"] },
+            { tier: 3, diff: 7, type: "v", ans: "CHUCHOTER", w1s: ["SECRET","CONFIDENCE","MYSTERE","AVEU"], w2s: ["VOIX","OREILLE","SOUFFLE","OMBRE"], clues: ["Parler a voix tres basse pour rester discret", "Murmurer a l oreille"], dists: ["MURMURER","SOUFFLER","DIVULGUER","AVOUER","SECRETER"] },
+            { tier: 3, diff: 7, type: "v", ans: "SCINTILLER", w1s: ["ETOILE","DIAMANT","JOYAU","CRISTAL"], w2s: ["NUIT","ECLAT","LUMIERE","HORIZON"], clues: ["Briller d une vive lumiere changeante", "Emettre des reflets tremblotants"], dists: ["RAYONNER","LUIRE","EBLOUIR","FLAMBOYER","ILLUMINER"] },
+            { tier: 3, diff: 7, type: "nom", ans: "SABLIER", w1s: ["HORLOGE","TEMPS","SECONDE","CHRONO"], w2s: ["SABLE","GRAIN","VERRE","FIOLE"], clues: ["Instrument antique mesurant le temps qui file", "Double fiole de verre a ecoulement"], dists: ["CADRAN","CHRONOMETRE","MONTRE","CLEPSYDRE","PENDULE"] },
 
-        // Format tableau compact sérialisé en NDJSON (Newline Delimited JSON)
-        const record = [
-          currentId++,
-          w1,
-          w2,
-          rel.ans,
-          clue,
-          rel.diff,
-          rel.type,
-          d1,
-          d2
-        ];
+            { tier: 4, diff: 9, type: "adj", ans: "INVIOLABLE", w1s: ["SECRET","CADENAS","BLINDAGE","FORTERESSE","COFFRE","SANCTUAIRE"], w2s: ["SERRURE","MYSTERE","SCEAU","SERMENT","SYSTEME"], clues: ["Que nulle force ne peut forcer ni alterer", "Garantissant une integrite absolue"], dists: ["HERMETIQUE","IMPENETRABLE","INCASSABLE","INALTIERABLE","INVINCIBLE"] },
+            { tier: 4, diff: 9, type: "adj", ans: "INTEMPOREL", w1s: ["OEUVRE","CHEF-D-OEUVRE","MONUMENT","ART","LEGENDE"], w2s: ["SIECLE","EPOQUE","TEMPS","HISTOIRE","MEMOIRE"], clues: ["Qui traverse les epoques sans vieillir", "Qui defie l usure des siecles"], dists: ["IMMORTEL","PERPETUEL","INDELEBILE","CELESTE","SUBLIME"] },
+            { tier: 4, diff: 10, type: "adj", ans: "INCOMMENSURABLE", w1s: ["ABYSSE","FOSSE","UNIVERS","COSMOS"], w2s: ["PROFONDEUR","INFINI","ETENDUE","DIMENSION"], clues: ["D une dimension qui depasse toute mesure", "Incommensurable et gigantesque"], dists: ["INFINI","INSONDABLE","GIGANTIQUE","DEMESURE","ABYSSAL"] },
+            { tier: 4, diff: 9, type: "adj", ans: "ENIGMATIQUE", w1s: ["MYSTERE","SPHINX","VOILE","ORACLE"], w2s: ["SECRET","REGARD","DESTIN","PROPHETIE"], clues: ["Difficile a sonder et charge de mysteres", "Qui intrigue profondement l esprit"], dists: ["OBSCUR","MYSTIQUE","SECRETIER","HERMETIQUE","VOILE"] },
+            { tier: 4, diff: 10, type: "v", ans: "TRANSMUTER", w1s: ["ALCHIMIE","PIERRE PHILOSOPHALE","ELIXIR","ATHANOR"], w2s: ["PLOMB","OR","MATIERE","SUBSTANCE","ESSENCE"], clues: ["Operer la transmutation de la matiere", "Elever un element vers sa perfection"], dists: ["METAMORPHOSER","SUBLIMER","CONVERTIR","PURIFIER","FORGER"] },
+            { tier: 4, diff: 10, type: "v", ans: "RENAITRE", w1s: ["PHOENIX","MYTHE","HEROS","LEGENDE"], w2s: ["CENDRE","FEU","MORT","DESTRUCTION"], clues: ["Revenir triomphalement a la vie apres destruction", "Ressusciter de ses propres ruines"], dists: ["RESURGIR","REVIVRE","SURVIVRE","S ELEVER","RASSURER"] }
+          ];
 
-        yield JSON.stringify(record) + '\n';
-      }
-    }
-  }
-}
+          const TIERS_CONFIG = [
+            { id: 1, name: "tier1_facile" },
+            { id: 2, name: "tier2_moyen" },
+            { id: 3, name: "tier3_difficile" },
+            { id: 4, name: "tier4_expert" }
+          ];
 
-async function run() {
-  const outputDir = path.resolve('vault_packs');
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
+          function pickDistractors(dists, count = 2) {
+            const shuffled = [...dists].sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, count);
+          }
 
-  let globalId = 1;
+          async function* generateCartesianPuzzles(seeds, startGlobalId) {
+            const seenCombos = new Set();
+            let currentId = startGlobalId;
 
-  for (const config of TIERS_CONFIG) {
-    const seeds = KNOWLEDGE_GRAPH.filter(r => r.tier === config.id);
-    const destinationPath = path.join(outputDir, `${config.name}.ndjson.gz`);
-    
-    console.log(`[Traitement] Génération cartésienne pour : ${config.name}...`);
+            for (const rel of seeds) {
+              for (const w1 of rel.w1s) {
+                for (const w2 of rel.w2s) {
+                  const comboKey = `${w1}#${w2}#${rel.ans}`;
+                  if (seenCombos.has(comboKey)) continue;
+                  seenCombos.add(comboKey);
 
-    const readable = Readable.from(generateUniquePuzzles(seeds, globalId));
-    const gzip = zlib.createGzip({ level: 9 });
-    const writeStream = fs.createWriteStream(destinationPath);
+                  const clue = rel.clues[Math.floor(Math.random() * rel.clues.length)];
+                  const [d1, d2] = pickDistractors(rel.dists, 2);
 
-    await pipeline(readable, gzip, writeStream);
+                  const record = [
+                    currentId++,
+                    w1,
+                    w2,
+                    rel.ans,
+                    clue,
+                    rel.diff,
+                    rel.type,
+                    d1,
+                    d2
+                  ];
 
-    const stats = fs.statSync(destinationPath);
-    const sizeMb = (stats.size / 1024 / 1024).toFixed(2);
-    console.log(`[Succès] ${config.name}.ndjson.gz finalisé (${sizeMb} Mo)`);
-  }
-}
+                  yield JSON.stringify(record) + "\n";
+                }
+              }
+            }
+          }
 
-run().catch((err) => {
-  console.error("Erreur critique durant la construction du vault :", err);
-  process.exit(1);
-});
+          async function run() {
+            const outputDir = path.resolve("vault_packs");
+            if (!fs.existsSync(outputDir)) {
+              fs.mkdirSync(outputDir, { recursive: true });
+            }
+
+            let globalId = 1;
+
+            for (const config of TIERS_CONFIG) {
+              const seeds = KNOWLEDGE_GRAPH.filter(r => r.tier === config.id);
+              const destinationPath = path.join(outputDir, `${config.name}.ndjson.gz`);
+
+              console.log(`Generation pour ${config.name}...`);
+              const readable = Readable.from(generateCartesianPuzzles(seeds, globalId));
+              const gzip = zlib.createGzip({ level: 9 });
+              const writeStream = fs.createWriteStream(destinationPath);
+
+              await pipeline(readable, gzip, writeStream);
+              console.log(`Ok: ${config.name}.ndjson.gz cree.`);
+            }
+          }
+
+          run().catch((err) => {
+            console.error("Erreur critique :", err);
+            process.exit(1);
+          });
+          EOF
+
+          node generator.js
+
+      - name: Publication automatique dans la Release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vault-release
+          name: Semantic Vault Release
+          draft: false
+          prerelease: false
+          files: vault_packs/*.ndjson.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
