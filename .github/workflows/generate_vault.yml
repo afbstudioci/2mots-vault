@@ -6,12 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       batches_per_tier:
-        description: 'Nombre de lots par palier (5 lots = ~200 énigmes/tier)'
+        description: 'Nombre de lots par palier'
         required: true
-        default: '5'
-  push:
-    branches:
-      - main
+        default: '3'
 
 permissions:
   contents: write
@@ -32,7 +29,7 @@ jobs:
       - name: Generation des Enigmes IA par Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BATCH_COUNT: ${{ github.event.inputs.batches_per_tier || '5' }}
+          BATCH_COUNT: ${{ github.event.inputs.batches_per_tier || '3' }}
         run: |
           cat << 'EOF' > generate_ai_vault.js
           const fs = require('fs');
@@ -42,34 +39,30 @@ jobs:
 
           const API_KEY = process.env.GEMINI_API_KEY;
           if (!API_KEY) {
-            console.error("ERREUR : GEMINI_API_KEY est introuvable dans les Secrets GitHub !");
+            console.error("ERREUR CRITIQUE : GEMINI_API_KEY est absente des Secrets GitHub !");
             process.exit(1);
           }
 
-          const BATCHES = parseInt(process.env.BATCH_COUNT || '5', 10);
+          const BATCHES = parseInt(process.env.BATCH_COUNT || '3', 10);
 
           const TIERS = [
-            { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets du quotidien, nature evidente, actions familieres, animaux, meteo. Mots simples.' },
-            { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture, techniques.' },
-            { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, psychologie, histoire, mecanismes complexes, emotions.' },
-            { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie, metaphores subtiles, philosophie.' }
+            { id: 1, name: 'tier1_facile', diff: 'Niveau Debutant (Niv 1-10) : Objets simples du quotidien, nature evidente, actions familieres.' },
+            { id: 2, name: 'tier2_moyen', diff: 'Niveau Intermediaire (Niv 11-30) : Metiers, sciences, sports, geographie, cuisine, culture.' },
+            { id: 3, name: 'tier3_difficile', diff: 'Niveau Avance (Niv 31-60) : Concepts abstraits, physique, histoire, processus complexes.' },
+            { id: 4, name: 'tier4_expert', diff: 'Niveau Expert / Maitre (Niv 61-100+) : Litterature, mythologie, vocabulaire noble, alchimie.' }
           ];
 
           const THEMES = [
             "Sciences & Espace", "Nature & Animaux", "Histoire & Civilisations",
             "Cuisine & Terroir", "Arts & Musique", "Sports & Aventure",
-            "Objets & Outils", "Sensations & Emotions", "Litterature & Mythes"
+            "Objets & Outils", "Sensations & Emotions"
           ];
 
           function callGemini(prompt) {
             return new Promise((resolve, reject) => {
               const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
               const payload = JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                  temperature: 0.85,
-                  responseMimeType: "application/json"
-                }
+                contents: [{ parts: [{ text: prompt }] }]
               });
 
               const req = https.request(url, {
@@ -84,10 +77,14 @@ jobs:
                 res.on('end', () => {
                   try {
                     const parsed = JSON.parse(data);
-                    const text = parsed.candidates[0].content.parts[0].text;
+                    if (parsed.error) {
+                      return reject(new Error("API Gemini Error: " + JSON.stringify(parsed.error)));
+                    }
+                    let text = parsed.candidates[0].content.parts[0].text;
+                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
                     resolve(JSON.parse(text));
                   } catch (e) {
-                    reject(new Error("Reponse Gemini invalide : " + data));
+                    reject(new Error("Reponse brute invalide : " + data.substring(0, 300)));
                   }
                 });
               });
@@ -113,19 +110,18 @@ jobs:
 
               for (let b = 0; b < BATCHES; b++) {
                 const theme = THEMES[b % THEMES.length];
-                console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (Theme: ${theme})...`);
+                console.log(`[Palier ${tier.id}] Lot ${b + 1}/${BATCHES} (${theme})...`);
 
-                const prompt = `Tu es le concepteur en chef du jeu de reflexion "2Mots".
-Tu dois generer un tableau JSON contenant 30 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES, INGENIEUSES et SANS AUCUNE INCOHERENCE.
+                const prompt = `Tu es le concepteur du jeu "2Mots".
+Reponds UNIQUEMENT par un tableau JSON brut contenant 25 enigmes semantiques 100% FRANCAISES, HAUTEMENT LOGIQUES et INGENIEUSES.
 
-Difficulte requise : ${tier.diff}
-Thematique prioritaire : ${theme}
+Difficulte : ${tier.diff}
+Theme : ${theme}
 
-REGLES ABSOLUES :
-1. LIEN SEMANTIQUE PARFAIT : word1 + word2 doivent mener incontestablement a "answer" (Ex: SOLEIL + PLUIE -> ARC-EN-CIEL, VOLANT + PLUME -> BADMINTON, VOLCAN + LAVE -> EXPLOSER).
-2. NATURE GRAMMATICALE IDENTIQUE : answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature (3 verbes a l infinitif, 3 noms, ou 3 adjectifs).
-3. INDICE CONTEXTUEL : L indice ("clue") doit decrire la passerelle sans reveler la reponse brute.
-4. DISTRACTEURS DU MEME UNIVERS : Les leurres doivent etre plausibles dans le meme domaine.
+REGLES :
+1. word1 + word2 doivent mener logiquement et avec evidence a "answer".
+2. answer, distractor1 et distractor2 DOIVENT avoir STRICTEMENT la meme nature grammaticale (3 verbes, 3 noms ou 3 adjectifs).
+3. L indice "clue" doit etre precis, contextuel et sans phrase generique.
 
 Format JSON attendu :
 [
@@ -168,10 +164,10 @@ Format JSON attendu :
                         d2
                       ]);
                     }
-                    console.log(` -> Total accumule: ${pool.length} enigmes.`);
+                    console.log(` -> Reussi (+${enigmas.length} enigmes)`);
                   }
                 } catch (err) {
-                  console.warn(`Avertissement sur le lot ${b + 1}:`, err.message);
+                  console.warn(`Avertissement :`, err.message);
                 }
 
                 await sleep(2000);
@@ -181,7 +177,7 @@ Format JSON attendu :
               const gz = zlib.gzipSync(Buffer.from(raw));
               const destPath = path.join('vault_packs', `${tier.name}.json.gz`);
               fs.writeFileSync(destPath, gz);
-              console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes, ${(gz.length / 1024).toFixed(1)} Ko).`);
+              console.log(`[Succes] ${tier.name}.json.gz sauvegarde (${pool.length} enigmes).`);
             }
           }
 
@@ -196,8 +192,8 @@ Format JSON attendu :
       - name: Publication automatique dans la Release GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vault-v${{ github.run_number }}
-          name: Semantic Vault v${{ github.run_number }} (AI Generated)
+          tag_name: latest
+          name: Latest AI Semantic Vault
           draft: false
           prerelease: false
           files: vault_packs/*.json.gz
